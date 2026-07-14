@@ -446,7 +446,7 @@
   const CONFIG = { WORKER_URL: 'https://worldcup-auth.cloverse.workers.dev' };  // 배포된 인증 서버
   const X_TARGET_HANDLE = '0xCloverse';  // 서버(worldcup-auth) 쪽 X_TARGET_USERNAME과 반드시 같아야 함
   const TG_BOT_USERNAME = 'Cloverse_community_bot';  // 텔레그램 봇 username(@ 없이). BotFather /setdomain 등록 필요
-  const TG_GROUP_URL = 'https://t.me/cloverse_community';  // 봇이 있는 공개 그룹(=멤버 인증 대상). 공개 주소라 안 바뀜
+  const TG_GROUP_URL = 'https://telegram.me/cloverse_community';  // 봇이 있는 공개 그룹(=멤버 인증 대상). t.me가 일부 환경서 DNS 막혀 telegram.me 사용
   const state = { wallet:null, final:null, third:null, x:false, tg:false, xHandle:'', xId:'', xSession:'', tgHandle:'', tgId:'', tgUser:null, submitted:false };
 
   // ---- wallet (simulated) — must connect before entering ----
