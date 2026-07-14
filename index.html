@@ -596,14 +596,20 @@
     let tries = 0, finished = false;
     const check = () => {
       if(finished) return;
+      const sub = document.querySelector('#auth-tg [data-role="sub"]');
       fetch(CONFIG.WORKER_URL + '/telegram/status?token=' + encodeURIComponent(state.tgToken) + '&_=' + Date.now(), { cache: 'no-store' })
         .then(r => r.json())
         .then(res => {
           console.log('[tg-poll]', JSON.stringify(res));   // 진단용
-          if(res.status === 'expired'){ finished = true; cleanupPoll(); resetTgBtn(btn); return; }
-          if(res.status === 'done'){ finished = true; cleanupPoll(); handleTelegramResult(res, btn); }
+          if(res.status === 'expired'){
+            finished = true; cleanupPoll();
+            if(sub) sub.textContent = '⚠️ 인증번호 만료 — 버튼으로 다시 시도해주세요';
+            resetTgBtn(btn); return;
+          }
+          if(res.status === 'done'){ finished = true; cleanupPoll(); handleTelegramResult(res, btn); return; }
+          if(sub) sub.textContent = '확인 중… 봇 대화에서 [시작]을 눌러주세요';   // pending
         })
-        .catch((e) => { console.log('[tg-poll error]', String(e)); });
+        .catch((e) => { console.log('[tg-poll error]', String(e)); if(sub) sub.textContent = '연결 오류 — 잠시 후 자동 재시도'; });
     };
     tgPollTimer = setInterval(() => {
       tries++;
