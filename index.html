@@ -859,7 +859,7 @@
   // modal submit — enabled once both socials are verified (picks already done to open the modal)
   function updateSubmit(){
     const b = document.getElementById('submit');
-    if(state.dup){ b.disabled = true; b.textContent = 'Already entered'; return; }
+    if(state.dupX || state.dupTg){ b.disabled = true; b.textContent = 'Already entered'; return; }
     if(!state.x || !state.tg){ b.disabled = true; b.textContent = 'Complete the steps above'; return; }
     b.disabled = false; b.textContent = 'Submit Prediction';
   }
@@ -884,19 +884,45 @@
     if(badge){ badge.style.display = 'inline-flex'; badge.textContent = 'Verified ✓'; badge.style.color = ''; badge.style.borderColor = ''; badge.style.background = ''; }
     if(sub) sub.textContent = 'Verified · ' + (handle || '');
     row.classList.add('done');
+    if(kind === 'x') state.dupX = false; else state.dupTg = false;   // 재인증 성공 시 중복 표시 해제
     state[kind] = true;
     updateSubmit();
   }
   function markDup(kind){
-    state.dup = true; state[kind] = false;
+    if(kind === 'x') state.dupX = true; else state.dupTg = true;
+    state[kind] = false;
     const row = document.getElementById('auth-' + kind);
     const badge = row.querySelector('[data-role="badge"]');
     const sub = row.querySelector('[data-role="sub"]');
-    if(badge){ badge.style.display = 'inline-flex'; badge.textContent = 'Already entered ✕'; badge.style.color = '#c0392b'; badge.style.borderColor = '#e74c3c'; badge.style.background = '#fdecea'; }
+    if(badge){
+      badge.style.display = 'inline-flex'; badge.textContent = 'Already entered ✕';
+      badge.style.color = '#c0392b'; badge.style.borderColor = '#e74c3c'; badge.style.background = '#fdecea';
+      badge.style.cursor = 'pointer'; badge.title = 'Tap to use a different account';
+      badge.onclick = function(){ resetAuth(kind); };   // ✕ 누르면 이 인증 리셋 → 다시 인증
+    }
     if(sub) sub.textContent = 'This account already entered';
     row.classList.remove('done');
-    const b = document.getElementById('submit'); if(b){ b.disabled = true; b.textContent = 'Already entered'; }
-    toast('This account has already entered — use a different one');
+    updateSubmit();
+    toast('This account has already entered — tap ✕ to use a different one');
+  }
+
+  // "Already entered ✕"의 ✕를 누르면 → 이 인증을 초기화하고 인증 버튼을 다시 보여줌 (다른 계정으로)
+  function resetAuth(kind){
+    if(kind === 'x') state.dupX = false; else state.dupTg = false;
+    state[kind] = false;
+    const row = document.getElementById('auth-' + kind);
+    const badge = row.querySelector('[data-role="badge"]');
+    if(badge){ badge.style.display = 'none'; badge.onclick = null; badge.style.cursor = ''; badge.style.color = ''; badge.style.borderColor = ''; badge.style.background = ''; }
+    const rsub = row.querySelector('.req-sub'); if(rsub) rsub.style.display = 'none';
+    const sub = row.querySelector('[data-role="sub"]'); if(sub) sub.textContent = '';
+    row.classList.remove('done');
+    const cbtn = row.querySelector('[data-role="connect"]');
+    if(cbtn){
+      cbtn.style.display = ''; cbtn.disabled = false;
+      if(kind === 'x'){ cbtn.textContent = 'Sign in with X'; }
+      else { cbtn.textContent = 'Verify with Telegram'; cbtn.onclick = function(){ connect('tg', cbtn); }; }
+    }
+    updateSubmit();
   }
 
   function openModal(){
