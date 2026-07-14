@@ -596,7 +596,7 @@
     tgPollTimer = setInterval(() => {
       tries++;
       if(tries > 90){ clearInterval(tgPollTimer); resetTgBtn(btn); toast('시간 초과 — 다시 시도해주세요'); return; }  // 약 3분
-      fetch(CONFIG.WORKER_URL + '/telegram/status?token=' + encodeURIComponent(state.tgToken))
+      fetch(CONFIG.WORKER_URL + '/telegram/status?token=' + encodeURIComponent(state.tgToken) + '&_=' + Date.now(), { cache: 'no-store' })
         .then(r => r.json())
         .then(res => {
           if(res.status === 'expired'){ clearInterval(tgPollTimer); resetTgBtn(btn); return; }
@@ -673,7 +673,7 @@
       toast('먼저 텔레그램 인증을 해주세요');
       return;
     }
-    fetch(CONFIG.WORKER_URL + '/telegram/recheck?id=' + encodeURIComponent(state.tgId))
+    fetch(CONFIG.WORKER_URL + '/telegram/recheck?id=' + encodeURIComponent(state.tgId) + '&_=' + Date.now(), { cache: 'no-store' })
       .then(r => r.json())
       .then(res => {
         btn.disabled = false; btn.textContent = orig;
