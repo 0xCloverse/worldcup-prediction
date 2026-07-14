@@ -879,8 +879,32 @@
   // modal submit — enabled once both socials are verified (picks already done to open the modal)
   function updateSubmit(){
     const b = document.getElementById('submit');
+    // X/텔레그램이 인증되는 순간, 그 계정이 이미 참가했는지 즉시 조회 (각각 한 번만)
+    if(state.x && !state._xChecked){ state._xChecked = true; checkDup('x', state.xId); }
+    if(state.tg && !state._tgChecked){ state._tgChecked = true; checkDup('tg', state.tgId); }
+    if(state.dup){ b.disabled = true; b.textContent = '이미 참가한 계정이에요'; return; }
     if(!state.x || !state.tg){ b.disabled = true; b.textContent = 'Complete the steps above'; return; }
     b.disabled = false; b.textContent = 'Submit Prediction';
+  }
+
+  // 인증한 계정(트위터/텔레그램)이 이미 참가했는지 조회 → 이미면 그 자리에서 경고 + 제출 잠금
+  function checkDup(kind, id){
+    if(!id) return;
+    const param = kind === 'x' ? 'xId' : 'tgId';
+    fetch(CONFIG.WORKER_URL + '/entry/check?' + param + '=' + encodeURIComponent(id))
+      .then(r => r.json())
+      .then(res => { if(res.ok && res.entered) markDup(kind); })
+      .catch(()=>{});
+  }
+  function markDup(kind){
+    state.dup = true;
+    const row = document.getElementById('auth-' + kind);
+    if(row){
+      const sub = row.querySelector('[data-role="sub"]'); if(sub) sub.textContent = '⚠️ 이미 참가한 계정';
+      const badge = row.querySelector('[data-role="badge"]'); if(badge) badge.textContent = '이미 참가 ✕';
+    }
+    const b = document.getElementById('submit'); if(b){ b.disabled = true; b.textContent = '이미 참가한 계정이에요'; }
+    toast('이 계정은 이미 참가했어요 — 다른 계정으로 인증해주세요');
   }
 
   function openModal(){
