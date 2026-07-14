@@ -428,11 +428,6 @@
         <span class="wopt-tx"><span class="wopt-nm">WalletConnect</span><span class="wopt-sub">Scan with a mobile wallet</span></span>
         <span class="wopt-arrow">↗</span>
       </button>
-      <button class="wopt" onclick="connectWallet(this,'Socios Wallet')">
-        <span class="wopt-ic" style="background:#EFE7FF">🔴</span>
-        <span class="wopt-tx"><span class="wopt-nm">Socios Wallet</span><span class="wopt-sub">Chiliz fan wallet</span></span>
-        <span class="wopt-arrow">↗</span>
-      </button>
     </div>
     <div class="fineprint" style="margin-top:16px">🔒 Prototype — no real wallet is connected. Selecting one simulates a connection.</div>
   </div>
@@ -477,13 +472,49 @@
     m.querySelectorAll('.wopt').forEach(o=>{ o.classList.remove('busy'); const a = o.querySelector('.wopt-arrow'); if(a) a.textContent = '↗'; });
   }
   function closeWalletBg(e){ if(e.target.id === 'wallet-modal') closeWalletModal(); }
+  let activeProvider = null;   // 현재 연결된 지갑 provider (injected=window.ethereum, WalletConnect=wcProvider)
+  let wcProvider = null;       // WalletConnect provider 인스턴스 (최초 연결 시 1회 생성)
+
+  // 지갑 옵션 클릭 → 종류별 분기
   async function connectWallet(opt, provider){
-    if(document.querySelector('.wopt.busy')) return;               // one at a time
-    // 지금은 브라우저 지갑(MetaMask 등 injected)만 — WalletConnect/Socios는 다음 단계
-    if(provider !== 'MetaMask'){
-      toast(provider + ' — coming soon. Use MetaMask (browser wallet) for now');
-      return;
+    if(document.querySelector('.wopt.busy')) return;               // 한 번에 하나만
+    if(provider === 'MetaMask') return connectInjected(opt);
+    if(provider === 'WalletConnect') return connectWalletConnect(opt);
+  }
+
+  function resetWopt(opt){ if(opt){ opt.classList.remove('busy'); const a = opt.querySelector('.wopt-arrow'); if(a) a.textContent = '↗'; } }
+
+  // Chiliz Chain(88888)으로 전환 — 지갑에 그 체인이 없으면 추가. injected/WalletConnect 공용.
+  async function ensureChiliz(prov){
+    try {
+      await prov.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHILIZ.chainIdHex }] });
+    } catch(switchErr){
+      if(switchErr && switchErr.code === 4902){
+        await prov.request({ method: 'wallet_addEthereumChain', params: [CHILIZ.params] });
+      } else if(switchErr && switchErr.code === 4001){
+        throw switchErr;   // 사용자가 네트워크 전환을 취소
+      }   // 그 밖의 전환 오류는 무시하고 진행
     }
+  }
+
+  // 연결 성공 공통 처리 (injected·WalletConnect 둘 다 여기로) — 이후 시트 파이프로 그대로 흐름
+  function onWalletConnected(addr, prov){
+    activeProvider = prov;
+    state.wallet = addr;
+    try{ localStorage.removeItem('cv-wallet-off'); }catch(e){}   // 명시적 연결 = 새로고침 시 자동복원 허용
+    const btn = document.getElementById('wallet-btn');
+    btn.classList.add('connected');
+    btn.innerHTML = '<span class="wdot"></span>' + shortAddr(addr);
+    document.getElementById('wallet-addr-full').textContent = shortAddr(addr);
+    closeWalletModal();
+    toast('Wallet connected · ' + shortAddr(addr));
+    updateEnterBtn();
+    hookWalletEvents(prov);
+    onWalletReady(addr);   // 이 지갑의 이전 참가 조회
+  }
+
+  // ① 브라우저 확장 지갑(MetaMask 등 injected)
+  async function connectInjected(opt){
     if(typeof window.ethereum === 'undefined'){
       toast('No browser wallet — install MetaMask and try again');
       window.open('https://metamask.io/download/', '_blank');
@@ -497,48 +528,80 @@
         await window.ethereum.request({ method: 'wallet_requestPermissions', params: [{ eth_accounts: {} }] });
       } catch(permErr){
         if(permErr && permErr.code === 4001) throw permErr;   // 사용자가 취소
-        // 일부 지갑은 이 기능이 없음 → 무시하고 진행
       }
-      // 1) 지갑 계정 연결 요청 (지갑 팝업 뜸)
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       const addr = accounts && accounts[0];
       if(!addr) throw { code: 4001 };
-      // 2) Chiliz Chain으로 전환 (지갑에 그 체인이 없으면 추가)
-      try {
-        await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHILIZ.chainIdHex }] });
-      } catch(switchErr){
-        if(switchErr && switchErr.code === 4902){
-          await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [CHILIZ.params] });
-        } else if(switchErr && switchErr.code === 4001){
-          throw switchErr;   // 사용자가 네트워크 전환을 취소
-        }   // 그 밖의 전환 오류는 무시하고 진행
-      }
-      // 3) 연결 성공 → 진짜 주소를 state에 (이후 시트 파이프로 그대로 흐름)
-      state.wallet = addr;
-      try{ localStorage.removeItem('cv-wallet-off'); }catch(e){}   // 명시적 연결 = 새로고침 시 자동복원 허용
-      const btn = document.getElementById('wallet-btn');
-      btn.classList.add('connected');
-      btn.innerHTML = '<span class="wdot"></span>' + shortAddr(addr);
-      document.getElementById('wallet-addr-full').textContent = shortAddr(addr);
-      closeWalletModal();
-      toast('Wallet connected · ' + shortAddr(addr));
-      updateEnterBtn();
-      hookWalletEvents();
-      onWalletReady(addr);   // 2️⃣3️⃣: 이 지갑의 이전 참가 조회 (다음 단계)
+      await ensureChiliz(window.ethereum);
+      onWalletConnected(addr, window.ethereum);
     } catch(err){
-      opt.classList.remove('busy');
-      const a = opt.querySelector('.wopt-arrow'); if(a) a.textContent = '↗';
+      resetWopt(opt);
       toast(err && err.code === 4001 ? 'Wallet connection cancelled' : ('Connection failed: ' + ((err && err.message) || 'try again')));
       console.error('wallet connect error', err);
     }
   }
 
-  // 지갑에서 계정을 바꾸거나 연결을 끊으면 사이트에 반영 (최초 1회만 등록)
-  let walletHooked = false;
-  function hookWalletEvents(){
-    if(walletHooked || !window.ethereum || !window.ethereum.on) return;
-    walletHooked = true;
-    window.ethereum.on('accountsChanged', (accs)=>{
+  // ② WalletConnect — 모바일 지갑을 QR로 연결 (Reown projectId 필요)
+  const WC_PROJECT_ID = '';   // ⬅️ dashboard.reown.com 에서 받은 무료 projectId를 이 따옴표 안에 붙여넣기
+  const WC_LIB_URL = 'https://unpkg.com/@walletconnect/ethereum-provider@2.21.1/dist/index.umd.js';
+  let wcLibPromise = null;
+  function loadWcLib(){   // WalletConnect 라이브러리는 클릭할 때만 불러옴 (평소 페이지를 무겁게 안 함)
+    const ready = window['@walletconnect/ethereum-provider'];
+    if(ready && ready.EthereumProvider) return Promise.resolve(ready.EthereumProvider);
+    if(!wcLibPromise){
+      wcLibPromise = new Promise(function(resolve, reject){
+        const s = document.createElement('script'); s.src = WC_LIB_URL;
+        s.onload = function(){ resolve(window['@walletconnect/ethereum-provider'].EthereumProvider); };
+        s.onerror = function(){ wcLibPromise = null; reject(new Error('WalletConnect library failed to load')); };
+        document.head.appendChild(s);
+      });
+    }
+    return wcLibPromise;
+  }
+  async function connectWalletConnect(opt){
+    if(!WC_PROJECT_ID){
+      toast('WalletConnect is being set up — use MetaMask for now');
+      return;
+    }
+    opt.classList.add('busy');
+    opt.querySelector('.wopt-arrow').innerHTML = '<span class="spin"></span>';
+    try {
+      const EthereumProvider = await loadWcLib();
+      if(!wcProvider){
+        wcProvider = await EthereumProvider.init({
+          projectId: WC_PROJECT_ID,
+          chains: [88888],                       // Chiliz Chain
+          optionalChains: [88888],
+          showQrModal: true,                     // WalletConnect 기본 QR 모달 사용
+          rpcMap: { 88888: CHILIZ.params.rpcUrls[0] },
+          metadata: {
+            name: 'Cloverse Worldcup Prediction',
+            description: 'Predict the World Cup final standings',
+            url: 'https://0xcloverse.github.io/worldcup-prediction/',
+            icons: ['https://0xcloverse.github.io/worldcup-prediction/favicon.png']
+          }
+        });
+      }
+      await wcProvider.connect();              // QR 모달 띄우고 스캔 대기
+      const addr = wcProvider.accounts && wcProvider.accounts[0];
+      if(!addr) throw { code: 4001 };
+      try { await ensureChiliz(wcProvider); } catch(e){ /* 일부 모바일 지갑은 체인 전환 미지원 → 무시 */ }
+      onWalletConnected(addr, wcProvider);
+    } catch(err){
+      resetWopt(opt);
+      const msg = (err && err.message) || '';
+      const cancelled = (err && err.code === 4001) || /reject|cancel|close|modal/i.test(msg);
+      toast(cancelled ? 'WalletConnect cancelled' : ('WalletConnect failed: ' + (msg || 'try again')));
+      console.error('walletconnect error', err);
+    }
+  }
+
+  // 지갑에서 계정을 바꾸거나 연결을 끊으면 사이트에 반영 (provider별 1회만 등록)
+  function hookWalletEvents(prov){
+    prov = prov || window.ethereum;
+    if(!prov || !prov.on || prov.__cvHooked) return;
+    prov.__cvHooked = true;
+    prov.on('accountsChanged', (accs)=>{
       if(!accs || !accs.length){ disconnectWallet(); return; }
       state.wallet = accs[0];
       const btn = document.getElementById('wallet-btn');
@@ -546,6 +609,7 @@
       document.getElementById('wallet-addr-full').textContent = shortAddr(accs[0]);
       onWalletReady(accs[0]);   // 바뀐 지갑으로 다시 조회 (이전 참가 상태 리셋 후)
     });
+    prov.on('disconnect', ()=>{ disconnectWallet(); });   // WalletConnect 세션 종료 등
   }
 
   // 페이지 열 때: 이미 연결된 지갑이 있으면 팝업 없이 자동 복원 (새로고침해도 지갑 유지)
@@ -610,6 +674,8 @@
   restoreWallet();   // 페이지 로드 시 자동 실행
 
   function disconnectWallet(){
+    if(activeProvider === wcProvider && wcProvider){ try{ wcProvider.disconnect(); }catch(e){} }   // WalletConnect면 세션도 종료
+    activeProvider = null;
     state.wallet = null;
     try{ localStorage.setItem('cv-wallet-off','1'); }catch(e){}   // 직접 끊음 = 새로고침해도 복원 안 함
     resetEntryState();   // 참가 상태(이전 픽·잠금)도 깨끗이
