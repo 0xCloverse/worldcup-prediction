@@ -508,6 +508,7 @@
       }
       // 3) 연결 성공 → 진짜 주소를 state에 (이후 시트 파이프로 그대로 흐름)
       state.wallet = addr;
+      try{ localStorage.removeItem('cv-wallet-off'); }catch(e){}   // 명시적 연결 = 새로고침 시 자동복원 허용
       const btn = document.getElementById('wallet-btn');
       btn.classList.add('connected');
       btn.innerHTML = '<span class="wdot"></span>' + shortAddr(addr);
@@ -516,6 +517,7 @@
       toast('지갑 연결됨 · ' + shortAddr(addr));
       updateEnterBtn();
       hookWalletEvents();
+      onWalletReady(addr);   // 2️⃣3️⃣: 이 지갑의 이전 참가 조회 (다음 단계)
     } catch(err){
       opt.classList.remove('busy');
       const a = opt.querySelector('.wopt-arrow'); if(a) a.textContent = '↗';
@@ -537,8 +539,32 @@
       document.getElementById('wallet-addr-full').textContent = shortAddr(accs[0]);
     });
   }
+
+  // 페이지 열 때: 이미 연결된 지갑이 있으면 팝업 없이 자동 복원 (새로고침해도 지갑 유지)
+  async function restoreWallet(){
+    if(typeof window.ethereum === 'undefined') return;
+    try {
+      if(localStorage.getItem('cv-wallet-off') === '1') return;   // 사용자가 직접 끊었으면 복원 안 함
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });  // 팝업 없이 조회
+      if(accounts && accounts.length){
+        state.wallet = accounts[0];
+        const btn = document.getElementById('wallet-btn');
+        btn.classList.add('connected');
+        btn.innerHTML = '<span class="wdot"></span>' + shortAddr(accounts[0]);
+        document.getElementById('wallet-addr-full').textContent = shortAddr(accounts[0]);
+        updateEnterBtn();
+        hookWalletEvents();
+        onWalletReady(accounts[0]);   // 2️⃣3️⃣: 이 지갑의 이전 참가 조회 (다음 단계)
+      }
+    } catch(e){}
+  }
+  // 2️⃣3️⃣ 자리 — 지갑이 연결/복원된 뒤 "이 지갑, 이전에 참가했나?" 조회하는 훅 (다음 단계에서 채움)
+  function onWalletReady(addr){ /* TODO: 이전 픽 불러오기 + 중복 잠금 */ }
+  restoreWallet();   // 페이지 로드 시 자동 실행
+
   function disconnectWallet(){
     state.wallet = null;
+    try{ localStorage.setItem('cv-wallet-off','1'); }catch(e){}   // 직접 끊음 = 새로고침해도 복원 안 함
     document.getElementById('wallet-menu').classList.remove('show');
     const btn = document.getElementById('wallet-btn');
     btn.classList.remove('connected');
