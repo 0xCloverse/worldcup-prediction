@@ -559,7 +559,32 @@
     } catch(e){}
   }
   // 2️⃣3️⃣ 자리 — 지갑이 연결/복원된 뒤 "이 지갑, 이전에 참가했나?" 조회하는 훅 (다음 단계에서 채움)
-  function onWalletReady(addr){ /* TODO: 이전 픽 불러오기 + 중복 잠금 */ }
+  function onWalletReady(addr){
+    // 이 지갑이 이미 참가했는지 서버에 조회 → 있으면 이전 픽 복원 + 잠금
+    fetch(CONFIG.WORKER_URL + '/entry/check?wallet=' + encodeURIComponent(addr))
+      .then(r => r.json())
+      .then(res => {
+        if(res.ok && res.entered && res.final && res.third){
+          applyEnteredState(res.final, res.third);
+        }
+      })
+      .catch(()=>{});
+  }
+  // 이미 참가한 지갑 → 이전 예측을 화면에 복원하고 제출을 잠금 (중복 참가 방지)
+  function applyEnteredState(final, third){
+    state.final = final; state.third = third; state.submitted = true;
+    document.querySelectorAll('.team').forEach(t=>{
+      if(t.dataset.team === final || t.dataset.team === third) t.classList.add('sel');
+    });
+    const rf = document.getElementById('rc-final'), rt = document.getElementById('rc-third');
+    if(rf){ rf.textContent = final; rf.classList.remove('empty'); }
+    if(rt){ rt.textContent = third; rt.classList.remove('empty'); }
+    const df = document.getElementById('done-final'), dt = document.getElementById('done-third');
+    if(df) df.textContent = final;  if(dt) dt.textContent = third;
+    const es = document.getElementById('enter-summary'), ed = document.getElementById('entered-state');
+    if(es) es.style.display = 'none';  if(ed) ed.style.display = 'block';
+    toast('이미 참가하셨어요 · 이전 예측을 불러왔어요');
+  }
   restoreWallet();   // 페이지 로드 시 자동 실행
 
   function disconnectWallet(){
