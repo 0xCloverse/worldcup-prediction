@@ -492,6 +492,13 @@
     opt.classList.add('busy');
     opt.querySelector('.wopt-arrow').innerHTML = '<span class="spin"></span>';
     try {
+      // 재연결 시에도 "계정/지갑 선택" 창이 뜨도록 권한을 먼저 요청 (다른 지갑·계정 선택 가능)
+      try {
+        await window.ethereum.request({ method: 'wallet_requestPermissions', params: [{ eth_accounts: {} }] });
+      } catch(permErr){
+        if(permErr && permErr.code === 4001) throw permErr;   // 사용자가 취소
+        // 일부 지갑은 이 기능이 없음 → 무시하고 진행
+      }
       // 1) 지갑 계정 연결 요청 (지갑 팝업 뜸)
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       const addr = accounts && accounts[0];
@@ -560,15 +567,19 @@
   }
   // 2️⃣3️⃣ 자리 — 지갑이 연결/복원된 뒤 "이 지갑, 이전에 참가했나?" 조회하는 훅 (다음 단계에서 채움)
   function onWalletReady(addr){
-    // 이 지갑이 이미 참가했는지 서버에 조회 → 있으면 이전 픽 복원 + 잠금
+    // 조회는 서버-시트 왕복이라 약간 걸려서, 그동안 Enter 버튼에 "확인 중"을 잠깐 표시
+    const b = document.getElementById('enter-btn');
+    if(b && !state.submitted){ b.disabled = true; b.textContent = '이전 참가 확인 중…'; }
     fetch(CONFIG.WORKER_URL + '/entry/check?wallet=' + encodeURIComponent(addr))
       .then(r => r.json())
       .then(res => {
         if(res.ok && res.entered && res.final && res.third){
-          applyEnteredState(res.final, res.third);
+          applyEnteredState(res.final, res.third);   // 이미 참가 → 이전 픽 복원 + 잠금
+        } else {
+          updateEnterBtn();   // 참가 안 함 → 버튼 정상 복구
         }
       })
-      .catch(()=>{});
+      .catch(()=>{ updateEnterBtn(); });
   }
   // 이미 참가한 지갑 → 이전 예측을 화면에 복원하고 제출을 잠금 (중복 참가 방지)
   function applyEnteredState(final, third){
