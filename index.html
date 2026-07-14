@@ -382,7 +382,7 @@
         <div class="req-main">
           <div class="ric" style="background:#229ED9">✈</div>
           <div class="rtx"><div class="rt">Join the Telegram group</div><div class="rd" data-role="sub">Verified automatically</div></div>
-          <div id="tg-widget-slot" data-role="connect"></div>
+          <button class="ract" data-role="connect" onclick="connect('tg', this)">Verify with Telegram</button>
           <span class="ract verified" data-role="badge" style="display:none">Verified ✓</span>
         </div>
         <div class="req-sub" style="display:none">
@@ -447,7 +447,7 @@
   const X_TARGET_HANDLE = '0xCloverse';  // 서버(worldcup-auth) 쪽 X_TARGET_USERNAME과 반드시 같아야 함
   const TG_BOT_USERNAME = 'Cloverse_community_bot';  // 텔레그램 봇 username(@ 없이). BotFather /setdomain 등록 필요
   const TG_GROUP_URL = 'https://telegram.me/cloverse_community';  // 봇이 있는 공개 그룹(=멤버 인증 대상). t.me가 일부 환경서 DNS 막혀 telegram.me 사용
-  const state = { wallet:null, final:null, third:null, x:false, tg:false, xHandle:'', xId:'', xSession:'', tgHandle:'', tgId:'', tgUser:null, submitted:false };
+  const state = { wallet:null, final:null, third:null, x:false, tg:false, xHandle:'', xId:'', xSession:'', tgHandle:'', tgId:'', tgToken:'', submitted:false };
 
   // ---- wallet (simulated) — must connect before entering ----
   const WALLET_ADDR = '0x7A3f…9C2b';        // demo address shown once "connected"
@@ -516,7 +516,7 @@
   function connect(kind, btn){
     if(!state.wallet){ openWalletModal(); return; }
     if(kind === 'x'){ connectX(btn); return; }
-    // 텔레그램은 공식 Login Widget 버튼(#tg-widget-slot)이 직접 처리 → connect('tg')로는 안 옴
+    if(kind === 'tg'){ connectTelegramDeep(btn); return; }
   }
 
   // Real X login: opens the Worker's /x/login in a popup, X handles auth, the popup
@@ -567,64 +567,64 @@
     }, 500);
   }
 
-  // ===== 텔레그램 공식 Login Widget =====
-  // 위젯은 "진짜 도메인"에서만 떠요 (BotFather /setdomain 등록 필요) → localhost에선 버튼이 안 보일 수 있어요.
-  let tgWidgetLoaded = false;
-  function loadTelegramWidget(){
-    if(tgWidgetLoaded) return;
-    const slot = document.getElementById('tg-widget-slot');
-    if(!slot) return;
-    tgWidgetLoaded = true;
-    const s = document.createElement('script');
-    s.src = 'https://telegram.org/js/telegram-widget.js?22';
-    s.async = true;
-    s.setAttribute('data-telegram-login', TG_BOT_USERNAME);
-    s.setAttribute('data-size', 'medium');
-    s.setAttribute('data-onauth', 'onTelegramAuth(user)');
-    s.setAttribute('data-request-access', 'write');
-    slot.appendChild(s);
+  // ===== 텔레그램 봇 딥링크 인증 =====
+  // 위젯(전화번호) 대신, 봇을 텔레그램 앱으로 바로 열어 [시작] → 봇이 그룹멤버 확인 → 사이트가 폴링으로 결과 받음.
+  let tgPollTimer = null;
+  function connectTelegramDeep(btn){
+    btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+    fetch(CONFIG.WORKER_URL + '/telegram/start')
+      .then(r => r.json())
+      .then(res => {
+        if(!res.ok || !res.token){ resetTgBtn(btn); toast('시작 실패 — 다시 시도해주세요'); return; }
+        state.tgToken = res.token;
+        // 텔레그램 앱/데스크톱으로 봇 대화 열기 (?start=토큰)
+        window.open('https://telegram.me/' + (res.bot || TG_BOT_USERNAME) + '?start=' + res.token, '_blank');
+        const row = document.getElementById('auth-tg');
+        row.querySelector('[data-role="sub"]').textContent = '텔레그램에서 [시작]을 누르면 자동 확인돼요…';
+        btn.innerHTML = '<span class="spin"></span> 확인 중…';
+        pollTelegram(btn);
+      })
+      .catch(err => { resetTgBtn(btn); toast('서버 연결 실패'); console.error('tg start error', err); });
   }
 
-  // 위젯 로그인 성공 시 텔레그램이 이 함수를 호출 → 서버에 "진짜 텔레그램인지 + 그룹 멤버인지" 확인 요청
-  window.onTelegramAuth = function(user){
-    state.tgUser = user;                        // Re-check 때 재사용하려고 저장
-    verifyTelegram(user, null);
-  };
+  function resetTgBtn(btn){ if(btn){ btn.disabled = false; btn.textContent = 'Verify with Telegram'; } }
 
-  function verifyTelegram(user, btn){
+  // 봇이 [시작]을 받아 결과를 저장할 때까지 서버에 계속 물어봄
+  function pollTelegram(btn){
+    clearInterval(tgPollTimer);
+    let tries = 0;
+    tgPollTimer = setInterval(() => {
+      tries++;
+      if(tries > 60){ clearInterval(tgPollTimer); resetTgBtn(btn); toast('시간 초과 — 다시 시도해주세요'); return; }  // 약 3분
+      fetch(CONFIG.WORKER_URL + '/telegram/status?token=' + encodeURIComponent(state.tgToken))
+        .then(r => r.json())
+        .then(res => {
+          if(res.status === 'expired'){ clearInterval(tgPollTimer); resetTgBtn(btn); return; }
+          if(res.status === 'done'){ clearInterval(tgPollTimer); handleTelegramResult(res, btn); }
+        })
+        .catch(() => {});
+    }, 3000);
+  }
+
+  function handleTelegramResult(res, btn){
     const row = document.getElementById('auth-tg');
-    fetch(CONFIG.WORKER_URL + '/telegram/verify', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(user)
-    })
-    .then(r => r.json())
-    .then(res => {
-      if(btn){ btn.disabled = false; btn.textContent = 'Re-check'; }
-      if(!res.ok){ toast('텔레그램 확인 실패: ' + (res.error || '')); return; }
-      state.tgHandle = res.handle; state.tgId = res.id;
-      const slot = document.getElementById('tg-widget-slot');
-      if(res.member){                           // 그룹 멤버 → 통과(초록불)
-        if(slot) slot.style.display = 'none';
-        row.querySelector('.req-sub').style.display = 'none';
-        row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
-        row.querySelector('[data-role="sub"]').textContent = 'Verified · ' + (res.handle || '');
-        row.classList.add('done');
-        state.tg = true;
-        toast('Telegram membership verified');
-        updateSubmit();
-      } else {                                  // 로그인은 됐지만 아직 그룹 미참여
-        if(slot) slot.style.display = 'none';
-        row.querySelector('.req-sub').style.display = 'block';
-        row.querySelector('.substatus').innerHTML =
-          'Signed in as <b>' + (res.handle || '@you') + '</b> — not in the group yet.';
-        toast('Signed in — join the group, then Re-check');
-      }
-    })
-    .catch(err => {
-      if(btn){ btn.disabled = false; btn.textContent = 'Re-check'; }
-      toast('서버 연결 실패 — Worker 주소를 확인하세요');
-      console.error('telegram verify error', err);
-    });
+    state.tgHandle = res.handle || ''; state.tgId = res.id || '';
+    if(res.member){                             // 그룹 멤버 → 통과(초록불)
+      if(btn) btn.style.display = 'none';
+      row.querySelector('.req-sub').style.display = 'none';
+      row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
+      row.querySelector('[data-role="sub"]').textContent = 'Verified · ' + (res.handle || '');
+      row.classList.add('done');
+      state.tg = true;
+      toast('Telegram verified · ' + (res.handle || ''));
+      updateSubmit();
+    } else {                                    // 봇 인증은 됐지만 아직 그룹 미참여
+      if(btn) btn.style.display = 'none';
+      row.querySelector('.req-sub').style.display = 'block';
+      row.querySelector('.substatus').innerHTML =
+        'Signed in as <b>' + (res.handle || '@you') + '</b> — not in the group yet.';
+      toast('그룹 참여 후 Re-check를 눌러주세요');
+    }
   }
 
   function openAction(kind){               // opens X profile / Telegram group in a new tab
@@ -667,13 +667,31 @@
         });
       return;
     }
-    // kind === 'tg' — 저장해둔 로그인 데이터로 그룹 멤버 여부만 다시 확인
-    if(!state.tgUser){
+    // kind === 'tg' — 저장된 텔레그램 user_id로 그룹 멤버 여부만 다시 확인 (봇 딥링크 다시 안 열어도 됨)
+    if(!state.tgId){
       btn.disabled = false; btn.textContent = orig;
-      toast('먼저 텔레그램 로그인을 해주세요');
+      toast('먼저 텔레그램 인증을 해주세요');
       return;
     }
-    verifyTelegram(state.tgUser, btn);
+    fetch(CONFIG.WORKER_URL + '/telegram/recheck?id=' + encodeURIComponent(state.tgId))
+      .then(r => r.json())
+      .then(res => {
+        btn.disabled = false; btn.textContent = orig;
+        if(!res.ok){ toast('확인 실패: ' + (res.error || '')); return; }
+        if(!res.member){ toast('아직 그룹에 없어요 — 참여를 먼저 해주세요'); return; }
+        state.tg = true;
+        row.querySelector('.req-sub').style.display = 'none';
+        row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
+        row.querySelector('[data-role="sub"]').textContent = 'Verified · ' + (state.tgHandle || '');
+        row.classList.add('done');
+        toast('Telegram membership verified');
+        updateSubmit();
+      })
+      .catch(err => {
+        btn.disabled = false; btn.textContent = orig;
+        toast('서버 연결 실패');
+        console.error('tg recheck error', err);
+      });
   }
 
   // sidebar CTA — enabled once both winners are picked; opens the modal
@@ -698,7 +716,6 @@
     document.getElementById('modal-picks').innerHTML =
       'Final: <b>' + state.final + '</b>&nbsp;&nbsp;·&nbsp;&nbsp;3rd place: <b>' + state.third + '</b>';
     updateSubmit();
-    loadTelegramWidget();                       // 텔레그램 위젯 버튼 심기 (최초 1회)
     document.getElementById('modal').classList.add('show');
     document.body.classList.add('modal-open');
   }
