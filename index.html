@@ -913,7 +913,14 @@
     })
     .then(r => r.json())
     .then(res => {
-      if(!res.ok) throw new Error(res.error || 'entry failed');
+      if(!res.ok){
+        if(res.sheet && res.sheet.result === 'duplicate'){   // 지갑/트위터/텔레그램 중 하나가 이미 참가
+          btn.disabled = false; btn.textContent = 'Submit Prediction';
+          toast('이미 참가한 계정이에요 — 지갑·트위터·텔레그램 중 하나가 이미 참가했어요 (1인 1회)');
+          return;
+        }
+        throw new Error(res.error || 'entry failed');
+      }
       state.submitted = true;
       // modal success
       document.getElementById('s-final').textContent = state.final;
