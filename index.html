@@ -595,7 +595,7 @@
     let tries = 0;
     tgPollTimer = setInterval(() => {
       tries++;
-      if(tries > 60){ clearInterval(tgPollTimer); resetTgBtn(btn); toast('시간 초과 — 다시 시도해주세요'); return; }  // 약 3분
+      if(tries > 90){ clearInterval(tgPollTimer); resetTgBtn(btn); toast('시간 초과 — 다시 시도해주세요'); return; }  // 약 3분
       fetch(CONFIG.WORKER_URL + '/telegram/status?token=' + encodeURIComponent(state.tgToken))
         .then(r => r.json())
         .then(res => {
@@ -603,7 +603,7 @@
           if(res.status === 'done'){ clearInterval(tgPollTimer); handleTelegramResult(res, btn); }
         })
         .catch(() => {});
-    }, 3000);
+    }, 2000);
   }
 
   function handleTelegramResult(res, btn){
