@@ -881,7 +881,7 @@
     const row = document.getElementById('auth-' + kind);
     const badge = row.querySelector('[data-role="badge"]');
     const sub = row.querySelector('[data-role="sub"]');
-    if(badge){ badge.style.display = 'inline-flex'; badge.textContent = 'Verified ✓'; badge.style.color = ''; badge.style.borderColor = ''; badge.style.background = ''; }
+    if(badge){ badge.style.display = 'inline-flex'; badge.textContent = 'Verified ✓'; badge.onclick = null; badge.style.cursor = ''; badge.style.pointerEvents = ''; badge.style.color = ''; badge.style.borderColor = ''; badge.style.background = ''; }
     if(sub) sub.textContent = 'Verified · ' + (handle || '');
     row.classList.add('done');
     if(kind === 'x') state.dupX = false; else state.dupTg = false;   // 재인증 성공 시 중복 표시 해제
@@ -897,7 +897,7 @@
     if(badge){
       badge.style.display = 'inline-flex'; badge.textContent = 'Already entered ✕';
       badge.style.color = '#c0392b'; badge.style.borderColor = '#e74c3c'; badge.style.background = '#fdecea';
-      badge.style.cursor = 'pointer'; badge.title = 'Tap to use a different account';
+      badge.style.cursor = 'pointer'; badge.style.pointerEvents = 'auto'; badge.title = 'Tap to use a different account';   // .verified의 pointer-events:none 무력화 → ✕ 클릭 가능
       badge.onclick = function(){ resetAuth(kind); };   // ✕ 누르면 이 인증 리셋 → 다시 인증
     }
     if(sub) sub.textContent = 'This account already entered';
@@ -912,7 +912,7 @@
     state[kind] = false;
     const row = document.getElementById('auth-' + kind);
     const badge = row.querySelector('[data-role="badge"]');
-    if(badge){ badge.style.display = 'none'; badge.onclick = null; badge.style.cursor = ''; badge.style.color = ''; badge.style.borderColor = ''; badge.style.background = ''; }
+    if(badge){ badge.style.display = 'none'; badge.onclick = null; badge.style.cursor = ''; badge.style.pointerEvents = ''; badge.style.color = ''; badge.style.borderColor = ''; badge.style.background = ''; }
     const rsub = row.querySelector('.req-sub'); if(rsub) rsub.style.display = 'none';
     const sub = row.querySelector('[data-role="sub"]'); if(sub) sub.textContent = '';
     row.classList.remove('done');
