@@ -320,7 +320,7 @@
       <div class="card enter-card">
         <div id="enter-summary">
           <h3>Enter</h3>
-          <p class="enter-note">Free to enter — connect your wallet, then follow <b>@Cloverse</b> on X and join Telegram.</p>
+          <p class="enter-note">Free to enter — connect your wallet, then follow <b>@0xCloverse</b> on X and join Telegram.</p>
           <div class="picks-recap">
             <div class="prow"><span class="pk">🏆 Final</span><span class="pv empty" id="rc-final">Not picked</span></div>
             <div class="prow"><span class="pk">🥉 3rd place</span><span class="pv empty" id="rc-third">Not picked</span></div>
@@ -365,14 +365,14 @@
       <div class="req" id="auth-x">
         <div class="req-main">
           <div class="ric" style="background:#000">𝕏</div>
-          <div class="rtx"><div class="rt">Follow @Cloverse on X</div><div class="rd" data-role="sub">Verified automatically</div></div>
+          <div class="rtx"><div class="rt">Follow @0xCloverse on X</div><div class="rd" data-role="sub">Verified automatically</div></div>
           <button class="ract" data-role="connect" onclick="connect('x', this)">Sign in with X</button>
           <span class="ract verified" data-role="badge" style="display:none">Verified ✓</span>
         </div>
         <div class="req-sub" style="display:none">
-          <span class="substatus">Signed in as <b>@you</b> — not following <b>@Cloverse</b> yet.</span>
+          <span class="substatus">Signed in as <b>@you</b> — not following <b>@0xCloverse</b> yet.</span>
           <div class="subbtns">
-            <button class="subbtn primary" onclick="openAction('x')">Follow @Cloverse ↗</button>
+            <button class="subbtn primary" onclick="openAction('x')">Follow @0xCloverse ↗</button>
             <button class="subbtn" onclick="recheck('x', this)">Re-check</button>
           </div>
         </div>
@@ -382,7 +382,7 @@
         <div class="req-main">
           <div class="ric" style="background:#229ED9">✈</div>
           <div class="rtx"><div class="rt">Join the Telegram group</div><div class="rd" data-role="sub">Verified automatically</div></div>
-          <button class="ract" data-role="connect" onclick="connect('tg', this)">Connect Telegram</button>
+          <div id="tg-widget-slot" data-role="connect"></div>
           <span class="ract verified" data-role="badge" style="display:none">Verified ✓</span>
         </div>
         <div class="req-sub" style="display:none">
@@ -442,7 +442,12 @@
 <canvas id="confetti"></canvas>
 
 <script>
-  const state = { wallet:null, final:null, third:null, x:false, tg:false, submitted:false };
+  // 서버(Cloudflare Worker) 주소 — 트위터 로그인 콜백 때문에 로컬(localhost)이 아니라 배포된 https 주소를 씀
+  const CONFIG = { WORKER_URL: 'https://worldcup-auth.cloverse.workers.dev' };  // 배포된 인증 서버
+  const X_TARGET_HANDLE = '0xCloverse';  // 서버(worldcup-auth) 쪽 X_TARGET_USERNAME과 반드시 같아야 함
+  const TG_BOT_USERNAME = 'Cloverse_community_bot';  // 텔레그램 봇 username(@ 없이). BotFather /setdomain 등록 필요
+  const TG_GROUP_URL = 'https://t.me/cloverse_community';  // 봇이 있는 공개 그룹(=멤버 인증 대상). 공개 주소라 안 바뀜
+  const state = { wallet:null, final:null, third:null, x:false, tg:false, xHandle:'', xId:'', xSession:'', tgHandle:'', tgId:'', tgUser:null, submitted:false };
 
   // ---- wallet (simulated) — must connect before entering ----
   const WALLET_ADDR = '0x7A3f…9C2b';        // demo address shown once "connected"
@@ -510,40 +515,165 @@
   // Identity comes from the sign-in, not a typed handle (blocks impersonation).
   function connect(kind, btn){
     if(!state.wallet){ openWalletModal(); return; }
+    if(kind === 'x'){ connectX(btn); return; }
+    // 텔레그램은 공식 Login Widget 버튼(#tg-widget-slot)이 직접 처리 → connect('tg')로는 안 옴
+  }
+
+  // Real X login: opens the Worker's /x/login in a popup, X handles auth, the popup
+  // posts the result back to this window (window.opener) and closes itself.
+  function connectX(btn){
     btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
-    const provider = kind==='x' ? 'X' : 'Telegram';
-    setTimeout(()=>{                       // simulates OAuth (X) / Login Widget (Telegram)
-      const row = document.getElementById('auth-'+kind);
-      btn.style.display = 'none';
-      row.querySelector('.req-sub').style.display = 'block';
-      row.querySelector('[data-role="sub"]').textContent = 'Signed in as @you';
-      toast('Signed in to ' + provider + ' as @you');
-    }, 1100);
+    const popup = window.open(CONFIG.WORKER_URL + '/x/login', 'cloverse-x-auth', 'width=520,height=640');
+    if(!popup){
+      btn.disabled = false; btn.textContent = 'Sign in with X';
+      toast('팝업이 차단됐어요 — 브라우저에서 팝업을 허용하고 다시 시도해주세요');
+      return;
+    }
+    const row = document.getElementById('auth-x');
+    const onMessage = (e) => {
+      if(!e.data || e.data.type !== 'cloverse-x-auth') return;
+      window.removeEventListener('message', onMessage);
+      clearInterval(watchClosed);
+      if(!e.data.ok){
+        btn.disabled = false; btn.textContent = 'Sign in with X';
+        toast('X 로그인 실패: ' + (e.data.error || '알 수 없는 오류'));
+        return;
+      }
+      state.xHandle = e.data.handle; state.xId = e.data.id; state.xSession = e.data.session;
+      if(e.data.following){                // already following @0xCloverse — verified immediately
+        btn.style.display = 'none';
+        row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
+        row.querySelector('[data-role="sub"]').textContent = 'Verified · ' + e.data.handle;
+        row.classList.add('done');
+        state.x = true;
+        toast('Follow verified · ' + e.data.handle);
+        updateSubmit();
+      } else {                              // signed in, but not following yet
+        btn.style.display = 'none';
+        row.querySelector('.req-sub').style.display = 'block';
+        row.querySelector('.substatus').innerHTML =
+          'Signed in as <b>' + e.data.handle + '</b> — not following <b>@' + X_TARGET_HANDLE + '</b> yet.';
+        toast('Signed in as ' + e.data.handle);
+      }
+    };
+    window.addEventListener('message', onMessage);
+    // if the user closes the popup without finishing, re-enable the button
+    const watchClosed = setInterval(()=>{
+      if(popup.closed){
+        clearInterval(watchClosed);
+        window.removeEventListener('message', onMessage);
+        if(btn.style.display !== 'none'){ btn.disabled = false; btn.textContent = 'Sign in with X'; }
+      }
+    }, 500);
+  }
+
+  // ===== 텔레그램 공식 Login Widget =====
+  // 위젯은 "진짜 도메인"에서만 떠요 (BotFather /setdomain 등록 필요) → localhost에선 버튼이 안 보일 수 있어요.
+  let tgWidgetLoaded = false;
+  function loadTelegramWidget(){
+    if(tgWidgetLoaded) return;
+    const slot = document.getElementById('tg-widget-slot');
+    if(!slot) return;
+    tgWidgetLoaded = true;
+    const s = document.createElement('script');
+    s.src = 'https://telegram.org/js/telegram-widget.js?22';
+    s.async = true;
+    s.setAttribute('data-telegram-login', TG_BOT_USERNAME);
+    s.setAttribute('data-size', 'medium');
+    s.setAttribute('data-onauth', 'onTelegramAuth(user)');
+    s.setAttribute('data-request-access', 'write');
+    slot.appendChild(s);
+  }
+
+  // 위젯 로그인 성공 시 텔레그램이 이 함수를 호출 → 서버에 "진짜 텔레그램인지 + 그룹 멤버인지" 확인 요청
+  window.onTelegramAuth = function(user){
+    state.tgUser = user;                        // Re-check 때 재사용하려고 저장
+    verifyTelegram(user, null);
+  };
+
+  function verifyTelegram(user, btn){
+    const row = document.getElementById('auth-tg');
+    fetch(CONFIG.WORKER_URL + '/telegram/verify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(user)
+    })
+    .then(r => r.json())
+    .then(res => {
+      if(btn){ btn.disabled = false; btn.textContent = 'Re-check'; }
+      if(!res.ok){ toast('텔레그램 확인 실패: ' + (res.error || '')); return; }
+      state.tgHandle = res.handle; state.tgId = res.id;
+      const slot = document.getElementById('tg-widget-slot');
+      if(res.member){                           // 그룹 멤버 → 통과(초록불)
+        if(slot) slot.style.display = 'none';
+        row.querySelector('.req-sub').style.display = 'none';
+        row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
+        row.querySelector('[data-role="sub"]').textContent = 'Verified · ' + (res.handle || '');
+        row.classList.add('done');
+        state.tg = true;
+        toast('Telegram membership verified');
+        updateSubmit();
+      } else {                                  // 로그인은 됐지만 아직 그룹 미참여
+        if(slot) slot.style.display = 'none';
+        row.querySelector('.req-sub').style.display = 'block';
+        row.querySelector('.substatus').innerHTML =
+          'Signed in as <b>' + (res.handle || '@you') + '</b> — not in the group yet.';
+        toast('Signed in — join the group, then Re-check');
+      }
+    })
+    .catch(err => {
+      if(btn){ btn.disabled = false; btn.textContent = 'Re-check'; }
+      toast('서버 연결 실패 — Worker 주소를 확인하세요');
+      console.error('telegram verify error', err);
+    });
   }
 
   function openAction(kind){               // opens X profile / Telegram group in a new tab
     document.getElementById('auth-'+kind).dataset.opened = '1';
-    toast(kind==='x' ? 'Opened X — tap Follow, then Re-check' : 'Opened Telegram — tap Join, then Re-check');
+    if(kind === 'x'){
+      window.open('https://x.com/' + X_TARGET_HANDLE, '_blank');
+      toast('Opened X — tap Follow, then Re-check');
+      return;
+    }
+    if(TG_GROUP_URL){ window.open(TG_GROUP_URL, '_blank'); }
+    toast('Opened Telegram — tap Join, then Re-check');
   }
 
   function recheck(kind, btn){             // re-queries the API for the current follow/member status
     const row = document.getElementById('auth-'+kind);
     const orig = btn.textContent;
     btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
-    setTimeout(()=>{
-      if(row.dataset.opened !== '1'){      // still not following/joined → stays unverified
-        btn.disabled = false; btn.textContent = orig;
-        toast(kind==='x' ? 'Not following yet — tap Follow first' : 'Not a member yet — tap Join first');
-        return;
-      }
-      state[kind] = true;
-      row.querySelector('.req-sub').style.display = 'none';
-      row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
-      row.querySelector('[data-role="sub"]').textContent = 'Verified · @you';
-      row.classList.add('done');
-      toast(kind==='x' ? 'Follow verified via X API' : 'Membership verified via bot');
-      updateSubmit();
-    }, 1000);
+    if(kind === 'x'){
+      fetch(CONFIG.WORKER_URL + '/x/recheck?session=' + encodeURIComponent(state.xSession))
+        .then(r => r.json())
+        .then(res => {
+          btn.disabled = false; btn.textContent = orig;
+          if(!res.ok){
+            toast(res.error === 'session_expired' ? '로그인이 만료됐어요 — 다시 Sign in해주세요' : ('확인 실패: ' + res.error));
+            return;
+          }
+          if(!res.following){ toast('아직 팔로우하지 않았어요 — Follow 먼저 눌러주세요'); return; }
+          state.x = true;
+          row.querySelector('.req-sub').style.display = 'none';
+          row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
+          row.querySelector('[data-role="sub"]').textContent = 'Verified · ' + state.xHandle;
+          row.classList.add('done');
+          toast('Follow verified via X API');
+          updateSubmit();
+        })
+        .catch(err => {
+          btn.disabled = false; btn.textContent = orig;
+          toast('서버 연결 실패 — Worker 주소를 확인하세요');
+          console.error('x recheck error', err);
+        });
+      return;
+    }
+    // kind === 'tg' — 저장해둔 로그인 데이터로 그룹 멤버 여부만 다시 확인
+    if(!state.tgUser){
+      btn.disabled = false; btn.textContent = orig;
+      toast('먼저 텔레그램 로그인을 해주세요');
+      return;
+    }
+    verifyTelegram(state.tgUser, btn);
   }
 
   // sidebar CTA — enabled once both winners are picked; opens the modal
@@ -568,6 +698,7 @@
     document.getElementById('modal-picks').innerHTML =
       'Final: <b>' + state.final + '</b>&nbsp;&nbsp;·&nbsp;&nbsp;3rd place: <b>' + state.third + '</b>';
     updateSubmit();
+    loadTelegramWidget();                       // 텔레그램 위젯 버튼 심기 (최초 1회)
     document.getElementById('modal').classList.add('show');
     document.body.classList.add('modal-open');
   }
@@ -580,7 +711,19 @@
   function submitEntry(btn){
     if(!state.wallet){ openWalletModal(); return; }
     btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Submitting…';
-    setTimeout(()=>{
+    // 실제 서버로 참가 기록 전송 → 서버가 구글시트에 한 줄 저장
+    fetch(CONFIG.WORKER_URL + '/entry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        final: state.final, third: state.third, wallet: state.wallet,
+        xHandle: state.xHandle, xId: state.xId,
+        tgHandle: state.tgHandle, tgId: state.tgId
+      })
+    })
+    .then(r => r.json())
+    .then(res => {
+      if(!res.ok) throw new Error(res.error || 'entry failed');
       state.submitted = true;
       // modal success
       document.getElementById('s-final').textContent = state.final;
@@ -593,7 +736,12 @@
       document.getElementById('enter-summary').style.display = 'none';
       document.getElementById('entered-state').style.display = 'block';
       celebrate();
-    }, 1400);
+    })
+    .catch(err => {
+      btn.disabled = false; btn.textContent = 'Submit Prediction';
+      toast('제출 실패 — 서버 연결을 확인하세요');
+      console.error('submit error', err);
+    });
   }
 
   let toastTimer;
