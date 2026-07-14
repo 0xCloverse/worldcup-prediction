@@ -449,8 +449,18 @@
   const TG_GROUP_URL = 'https://telegram.me/cloverse_community';  // 봇이 있는 공개 그룹(=멤버 인증 대상). t.me가 일부 환경서 DNS 막혀 telegram.me 사용
   const state = { wallet:null, final:null, third:null, x:false, tg:false, xHandle:'', xId:'', xSession:'', tgHandle:'', tgId:'', tgToken:'', submitted:false };
 
-  // ---- wallet (simulated) — must connect before entering ----
-  const WALLET_ADDR = '0x7A3f…9C2b';        // demo address shown once "connected"
+  // ---- wallet (real, injected 지갑: MetaMask 등) — Chiliz Chain 연결 필수 ----
+  const CHILIZ = {
+    chainIdHex: '0x15b38',   // 88888
+    params: {
+      chainId: '0x15b38',
+      chainName: 'Chiliz Chain',
+      nativeCurrency: { name: 'Chiliz', symbol: 'CHZ', decimals: 18 },
+      rpcUrls: ['https://rpc.ankr.com/chiliz'],
+      blockExplorerUrls: ['https://chiliscan.com'],
+    },
+  };
+  function shortAddr(a){ return a.slice(0,6) + '…' + a.slice(-4); }
 
   function onWalletBtn(){                    // header button: open modal, or toggle account menu
     if(state.wallet) document.getElementById('wallet-menu').classList.toggle('show');
@@ -467,20 +477,65 @@
     m.querySelectorAll('.wopt').forEach(o=>{ o.classList.remove('busy'); const a = o.querySelector('.wopt-arrow'); if(a) a.textContent = '↗'; });
   }
   function closeWalletBg(e){ if(e.target.id === 'wallet-modal') closeWalletModal(); }
-  function connectWallet(opt, provider){
+  async function connectWallet(opt, provider){
     if(document.querySelector('.wopt.busy')) return;               // one at a time
+    // 지금은 브라우저 지갑(MetaMask 등 injected)만 — WalletConnect/Socios는 다음 단계
+    if(provider !== 'MetaMask'){
+      toast(provider + '는 곧 지원해요 — 지금은 MetaMask(브라우저 지갑)로 연결해주세요');
+      return;
+    }
+    if(typeof window.ethereum === 'undefined'){
+      toast('브라우저 지갑이 없어요 — MetaMask 설치 후 다시 시도해주세요');
+      window.open('https://metamask.io/download/', '_blank');
+      return;
+    }
     opt.classList.add('busy');
     opt.querySelector('.wopt-arrow').innerHTML = '<span class="spin"></span>';
-    setTimeout(()=>{                                               // simulates the wallet approval popup
-      state.wallet = WALLET_ADDR;
+    try {
+      // 1) 지갑 계정 연결 요청 (지갑 팝업 뜸)
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const addr = accounts && accounts[0];
+      if(!addr) throw { code: 4001 };
+      // 2) Chiliz Chain으로 전환 (지갑에 그 체인이 없으면 추가)
+      try {
+        await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHILIZ.chainIdHex }] });
+      } catch(switchErr){
+        if(switchErr && switchErr.code === 4902){
+          await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [CHILIZ.params] });
+        } else if(switchErr && switchErr.code === 4001){
+          throw switchErr;   // 사용자가 네트워크 전환을 취소
+        }   // 그 밖의 전환 오류는 무시하고 진행
+      }
+      // 3) 연결 성공 → 진짜 주소를 state에 (이후 시트 파이프로 그대로 흐름)
+      state.wallet = addr;
       const btn = document.getElementById('wallet-btn');
       btn.classList.add('connected');
-      btn.innerHTML = '<span class="wdot"></span>' + WALLET_ADDR;
-      document.getElementById('wallet-addr-full').textContent = WALLET_ADDR;
+      btn.innerHTML = '<span class="wdot"></span>' + shortAddr(addr);
+      document.getElementById('wallet-addr-full').textContent = shortAddr(addr);
       closeWalletModal();
-      toast(provider + ' connected · ' + WALLET_ADDR);
+      toast('지갑 연결됨 · ' + shortAddr(addr));
       updateEnterBtn();
-    }, 1000);
+      hookWalletEvents();
+    } catch(err){
+      opt.classList.remove('busy');
+      const a = opt.querySelector('.wopt-arrow'); if(a) a.textContent = '↗';
+      toast(err && err.code === 4001 ? '지갑 연결을 취소했어요' : ('연결 실패: ' + ((err && err.message) || '다시 시도해주세요')));
+      console.error('wallet connect error', err);
+    }
+  }
+
+  // 지갑에서 계정을 바꾸거나 연결을 끊으면 사이트에 반영 (최초 1회만 등록)
+  let walletHooked = false;
+  function hookWalletEvents(){
+    if(walletHooked || !window.ethereum || !window.ethereum.on) return;
+    walletHooked = true;
+    window.ethereum.on('accountsChanged', (accs)=>{
+      if(!accs || !accs.length){ disconnectWallet(); return; }
+      state.wallet = accs[0];
+      const btn = document.getElementById('wallet-btn');
+      btn.innerHTML = '<span class="wdot"></span>' + shortAddr(accs[0]);
+      document.getElementById('wallet-addr-full').textContent = shortAddr(accs[0]);
+    });
   }
   function disconnectWallet(){
     state.wallet = null;
