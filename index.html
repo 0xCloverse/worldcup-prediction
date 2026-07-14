@@ -365,7 +365,7 @@
       <div class="req" id="auth-x">
         <div class="req-main">
           <div class="ric" style="background:#000">𝕏</div>
-          <div class="rtx"><div class="rt">Follow @0xCloverse on X</div><div class="rd" data-role="sub">Verified automatically</div></div>
+          <div class="rtx"><div class="rt">Follow @0xCloverse on X</div><div class="rd" data-role="sub"></div></div>
           <button class="ract" data-role="connect" onclick="connect('x', this)">Sign in with X</button>
           <span class="ract verified" data-role="badge" style="display:none">Verified ✓</span>
         </div>
@@ -381,7 +381,7 @@
       <div class="req" id="auth-tg">
         <div class="req-main">
           <div class="ric" style="background:#229ED9">✈</div>
-          <div class="rtx"><div class="rt">Join the Telegram group</div><div class="rd" data-role="sub">Verified automatically</div></div>
+          <div class="rtx"><div class="rt">Join the Telegram group</div><div class="rd" data-role="sub"></div></div>
           <button class="ract" data-role="connect" onclick="connect('tg', this)">Verify with Telegram</button>
           <span class="ract verified" data-role="badge" style="display:none">Verified ✓</span>
         </div>
@@ -481,11 +481,11 @@
     if(document.querySelector('.wopt.busy')) return;               // one at a time
     // 지금은 브라우저 지갑(MetaMask 등 injected)만 — WalletConnect/Socios는 다음 단계
     if(provider !== 'MetaMask'){
-      toast(provider + '는 곧 지원해요 — 지금은 MetaMask(브라우저 지갑)로 연결해주세요');
+      toast(provider + ' — coming soon. Use MetaMask (browser wallet) for now');
       return;
     }
     if(typeof window.ethereum === 'undefined'){
-      toast('브라우저 지갑이 없어요 — MetaMask 설치 후 다시 시도해주세요');
+      toast('No browser wallet — install MetaMask and try again');
       window.open('https://metamask.io/download/', '_blank');
       return;
     }
@@ -521,14 +521,14 @@
       btn.innerHTML = '<span class="wdot"></span>' + shortAddr(addr);
       document.getElementById('wallet-addr-full').textContent = shortAddr(addr);
       closeWalletModal();
-      toast('지갑 연결됨 · ' + shortAddr(addr));
+      toast('Wallet connected · ' + shortAddr(addr));
       updateEnterBtn();
       hookWalletEvents();
       onWalletReady(addr);   // 2️⃣3️⃣: 이 지갑의 이전 참가 조회 (다음 단계)
     } catch(err){
       opt.classList.remove('busy');
       const a = opt.querySelector('.wopt-arrow'); if(a) a.textContent = '↗';
-      toast(err && err.code === 4001 ? '지갑 연결을 취소했어요' : ('연결 실패: ' + ((err && err.message) || '다시 시도해주세요')));
+      toast(err && err.code === 4001 ? 'Wallet connection cancelled' : ('Connection failed: ' + ((err && err.message) || 'try again')));
       console.error('wallet connect error', err);
     }
   }
@@ -580,7 +580,7 @@
     resetEntryState();   // 바뀐 지갑이니 이전 참가 상태부터 깨끗이 (다른 지갑 결과 남지 않게)
     // 조회는 서버-시트 왕복이라 약간 걸려서, 그동안 Enter 버튼에 "확인 중"을 잠깐 표시
     const b = document.getElementById('enter-btn');
-    if(b){ b.disabled = true; b.textContent = '이전 참가 확인 중…'; }
+    if(b){ b.disabled = true; b.textContent = 'Checking previous entry…'; }
     fetch(CONFIG.WORKER_URL + '/entry/check?wallet=' + encodeURIComponent(addr))
       .then(r => r.json())
       .then(res => {
@@ -605,7 +605,7 @@
     if(df) df.textContent = final;  if(dt) dt.textContent = third;
     const es = document.getElementById('enter-summary'), ed = document.getElementById('entered-state');
     if(es) es.style.display = 'none';  if(ed) ed.style.display = 'block';
-    toast('이미 참가하셨어요 · 이전 예측을 불러왔어요');
+    toast('Already entered — showing your prediction');
   }
   restoreWallet();   // 페이지 로드 시 자동 실행
 
@@ -655,7 +655,7 @@
     const popup = window.open(CONFIG.WORKER_URL + '/x/login', 'cloverse-x-auth', 'width=520,height=640');
     if(!popup){
       btn.disabled = false; btn.textContent = 'Sign in with X';
-      toast('팝업이 차단됐어요 — 브라우저에서 팝업을 허용하고 다시 시도해주세요');
+      toast('Popup blocked — allow popups and try again');
       return;
     }
     const row = document.getElementById('auth-x');
@@ -665,18 +665,13 @@
       clearInterval(watchClosed);
       if(!e.data.ok){
         btn.disabled = false; btn.textContent = 'Sign in with X';
-        toast('X 로그인 실패: ' + (e.data.error || '알 수 없는 오류'));
+        toast('X sign-in failed: ' + (e.data.error || 'unknown error'));
         return;
       }
       state.xHandle = e.data.handle; state.xId = e.data.id; state.xSession = e.data.session;
       if(e.data.following){                // already following @0xCloverse — verified immediately
         btn.style.display = 'none';
-        row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
-        row.querySelector('[data-role="sub"]').textContent = 'Verified · ' + e.data.handle;
-        row.classList.add('done');
-        state.x = true;
-        toast('Follow verified · ' + e.data.handle);
-        updateSubmit();
+        checkThenMark('x', e.data.id, e.data.handle);   // 인증됨 → 중복조회 후 Verified/Already-entered 한 번에
       } else {                              // signed in, but not following yet
         btn.style.display = 'none';
         row.querySelector('.req-sub').style.display = 'block';
@@ -704,25 +699,25 @@
     fetch(CONFIG.WORKER_URL + '/telegram/start')
       .then(r => r.json())
       .then(res => {
-        if(!res.ok || !res.token){ resetTgBtn(btn); toast('시작 실패 — 다시 시도해주세요'); return; }
+        if(!res.ok || !res.token){ resetTgBtn(btn); toast('Failed to start — try again'); return; }
         state.tgToken = res.token;
         // 텔레그램 앱/데스크톱으로 봇 대화 열기 (?start=토큰) — 봇이 자동 인증
         window.open('https://telegram.me/' + (res.bot || TG_BOT_USERNAME) + '?start=' + res.token, '_blank');
         const row = document.getElementById('auth-tg');
-        row.querySelector('[data-role="sub"]').textContent = '봇에서 인증되면 → 이 버튼을 눌러주세요 👇';
+        row.querySelector('[data-role="sub"]').textContent = 'Verify in the bot, then tap this button 👇';
         // 버튼을 "지금 확인" 모드로 전환 (자동 폴링이 안 잡아도 사용자가 직접 100% 확인)
         btn.disabled = false;
-        btn.textContent = '✓ 봇 인증 후 여기 눌러 확인';
+        btn.textContent = '✓ Tap here after verifying in the bot';
         btn.onclick = function(){ checkTelegramNow(btn); };
         pollTelegram(btn);   // 자동 폴링도 병행 (되면 저절로 초록불)
       })
-      .catch(err => { resetTgBtn(btn); toast('서버 연결 실패'); console.error('tg start error', err); });
+      .catch(err => { resetTgBtn(btn); toast('Server connection failed'); console.error('tg start error', err); });
   }
 
   // 사용자가 직접 누르는 "지금 확인" — 명시적 클릭이라 폴링 타이밍과 무관하게 100% 작동
   function checkTelegramNow(btn){
     const orig = btn.textContent;
-    btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 확인 중…';
+    btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Checking…';
     fetch(CONFIG.WORKER_URL + '/telegram/status?token=' + encodeURIComponent(state.tgToken) + '&_=' + Date.now(), { cache: 'no-store' })
       .then(r => r.json())
       .then(res => {
@@ -730,10 +725,10 @@
         if(res.status === 'done'){ cleanupPoll(); handleTelegramResult(res, btn); return; }
         btn.disabled = false; btn.textContent = orig;
         toast(res.status === 'expired'
-          ? '인증번호가 만료됐어요 — "Verify with Telegram"을 다시 눌러주세요'
-          : '아직 봇 인증 전이에요 — 봇 대화에서 인증 후 다시 눌러주세요');
+          ? 'Code expired — tap "Verify with Telegram" again'
+          : 'Not verified yet — verify in the bot chat, then tap again');
       })
-      .catch(err => { btn.disabled = false; btn.textContent = orig; toast('연결 오류 — 다시 눌러주세요'); });
+      .catch(err => { btn.disabled = false; btn.textContent = orig; toast('Connection error — tap again'); });
   }
 
   function resetTgBtn(btn){ if(btn){ btn.disabled = false; btn.textContent = 'Verify with Telegram'; btn.onclick = function(){ connect('tg', btn); }; } }
@@ -751,17 +746,17 @@
           console.log('[tg-poll]', JSON.stringify(res));   // 진단용
           if(res.status === 'expired'){
             finished = true; cleanupPoll();
-            if(sub) sub.textContent = '⚠️ 인증번호 만료 — 버튼으로 다시 시도해주세요';
+            if(sub) sub.textContent = '⚠️ Code expired — tap the button to retry';
             resetTgBtn(btn); return;
           }
           if(res.status === 'done'){ finished = true; cleanupPoll(); handleTelegramResult(res, btn); return; }
-          if(sub) sub.textContent = '확인 중… 봇 대화에서 [시작]을 눌러주세요';   // pending
+          if(sub) sub.textContent = 'Checking… tap [Start] in the bot chat';   // pending
         })
-        .catch((e) => { console.log('[tg-poll error]', String(e)); if(sub) sub.textContent = '연결 오류 — 잠시 후 자동 재시도'; });
+        .catch((e) => { console.log('[tg-poll error]', String(e)); if(sub) sub.textContent = 'Connection error — retrying…'; });
     };
     tgPollTimer = setInterval(() => {
       tries++;
-      if(tries > 90){ cleanupPoll(); resetTgBtn(btn); toast('시간 초과 — 다시 시도해주세요'); return; }  // 약 3분
+      if(tries > 90){ cleanupPoll(); resetTgBtn(btn); toast('Timed out — try again'); return; }  // 약 3분
       check();
     }, 2000);
     // 텔레그램 다녀와서 탭이 다시 보이거나(visibilitychange) 창이 다시 포커스되면(focus) 즉시 확인 — 백그라운드 지연 우회
@@ -785,18 +780,13 @@
     if(res.member){                             // 그룹 멤버 → 통과(초록불)
       if(btn) btn.style.display = 'none';
       row.querySelector('.req-sub').style.display = 'none';
-      row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
-      row.querySelector('[data-role="sub"]').textContent = 'Verified · ' + (res.handle || '');
-      row.classList.add('done');
-      state.tg = true;
-      toast('Telegram verified · ' + (res.handle || ''));
-      updateSubmit();
+      checkThenMark('tg', res.id, res.handle);   // 인증됨 → 중복조회 후 Verified/Already-entered 한 번에
     } else {                                    // 봇 인증은 됐지만 아직 그룹 미참여
       if(btn) btn.style.display = 'none';
       row.querySelector('.req-sub').style.display = 'block';
       row.querySelector('.substatus').innerHTML =
         'Signed in as <b>' + (res.handle || '@you') + '</b> — not in the group yet.';
-      toast('그룹 참여 후 Re-check를 눌러주세요');
+      toast('Join the group, then tap Re-check');
     }
   }
 
@@ -821,21 +811,16 @@
         .then(res => {
           btn.disabled = false; btn.textContent = orig;
           if(!res.ok){
-            toast(res.error === 'session_expired' ? '로그인이 만료됐어요 — 다시 Sign in해주세요' : ('확인 실패: ' + res.error));
+            toast(res.error === 'session_expired' ? 'Session expired — please Sign in again' : ('Check failed: ' + res.error));
             return;
           }
-          if(!res.following){ toast('아직 팔로우하지 않았어요 — Follow 먼저 눌러주세요'); return; }
-          state.x = true;
+          if(!res.following){ toast('Not following yet — tap Follow first'); return; }
           row.querySelector('.req-sub').style.display = 'none';
-          row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
-          row.querySelector('[data-role="sub"]').textContent = 'Verified · ' + state.xHandle;
-          row.classList.add('done');
-          toast('Follow verified via X API');
-          updateSubmit();
+          checkThenMark('x', state.xId, state.xHandle);
         })
         .catch(err => {
           btn.disabled = false; btn.textContent = orig;
-          toast('서버 연결 실패 — Worker 주소를 확인하세요');
+          toast('Server connection failed — check the Worker URL');
           console.error('x recheck error', err);
         });
       return;
@@ -843,26 +828,21 @@
     // kind === 'tg' — 저장된 텔레그램 user_id로 그룹 멤버 여부만 다시 확인 (봇 딥링크 다시 안 열어도 됨)
     if(!state.tgId){
       btn.disabled = false; btn.textContent = orig;
-      toast('먼저 텔레그램 인증을 해주세요');
+      toast('Verify Telegram first');
       return;
     }
     fetch(CONFIG.WORKER_URL + '/telegram/recheck?id=' + encodeURIComponent(state.tgId) + '&_=' + Date.now(), { cache: 'no-store' })
       .then(r => r.json())
       .then(res => {
         btn.disabled = false; btn.textContent = orig;
-        if(!res.ok){ toast('확인 실패: ' + (res.error || '')); return; }
-        if(!res.member){ toast('아직 그룹에 없어요 — 참여를 먼저 해주세요'); return; }
-        state.tg = true;
+        if(!res.ok){ toast('Check failed: ' + (res.error || '')); return; }
+        if(!res.member){ toast('Not in the group yet — join first'); return; }
         row.querySelector('.req-sub').style.display = 'none';
-        row.querySelector('[data-role="badge"]').style.display = 'inline-flex';
-        row.querySelector('[data-role="sub"]').textContent = 'Verified · ' + (state.tgHandle || '');
-        row.classList.add('done');
-        toast('Telegram membership verified');
-        updateSubmit();
+        checkThenMark('tg', state.tgId, state.tgHandle);
       })
       .catch(err => {
         btn.disabled = false; btn.textContent = orig;
-        toast('서버 연결 실패');
+        toast('Server connection failed');
         console.error('tg recheck error', err);
       });
   }
@@ -879,32 +859,44 @@
   // modal submit — enabled once both socials are verified (picks already done to open the modal)
   function updateSubmit(){
     const b = document.getElementById('submit');
-    // X/텔레그램이 인증되는 순간, 그 계정이 이미 참가했는지 즉시 조회 (각각 한 번만)
-    if(state.x && !state._xChecked){ state._xChecked = true; checkDup('x', state.xId); }
-    if(state.tg && !state._tgChecked){ state._tgChecked = true; checkDup('tg', state.tgId); }
-    if(state.dup){ b.disabled = true; b.textContent = '이미 참가한 계정이에요'; return; }
+    if(state.dup){ b.disabled = true; b.textContent = 'Already entered'; return; }
     if(!state.x || !state.tg){ b.disabled = true; b.textContent = 'Complete the steps above'; return; }
     b.disabled = false; b.textContent = 'Submit Prediction';
   }
 
-  // 인증한 계정(트위터/텔레그램)이 이미 참가했는지 조회 → 이미면 그 자리에서 경고 + 제출 잠금
-  function checkDup(kind, id){
-    if(!id) return;
-    const param = kind === 'x' ? 'xId' : 'tgId';
-    fetch(CONFIG.WORKER_URL + '/entry/check?' + param + '=' + encodeURIComponent(id))
+  // After an auth succeeds: look up whether that account already entered, then show the FINAL state
+  // in one go (Verified green OR Already-entered red) — no flicker from "verified → already entered".
+  function checkThenMark(kind, id, handle){
+    const row = document.getElementById('auth-' + kind);
+    const badge = row.querySelector('[data-role="badge"]');
+    const sub = row.querySelector('[data-role="sub"]');
+    if(badge){ badge.style.display = 'inline-flex'; badge.textContent = 'Checking…'; }
+    if(sub) sub.textContent = 'Checking…';
+    fetch(CONFIG.WORKER_URL + '/entry/check?' + (kind === 'x' ? 'xId' : 'tgId') + '=' + encodeURIComponent(id))
       .then(r => r.json())
-      .then(res => { if(res.ok && res.entered) markDup(kind); })
-      .catch(()=>{});
+      .then(res => { (res.ok && res.entered) ? markDup(kind) : markVerified(kind, handle); })
+      .catch(() => markVerified(kind, handle));   // lookup failed but auth itself passed → Verified
+  }
+  function markVerified(kind, handle){
+    const row = document.getElementById('auth-' + kind);
+    const badge = row.querySelector('[data-role="badge"]');
+    const sub = row.querySelector('[data-role="sub"]');
+    if(badge){ badge.style.display = 'inline-flex'; badge.textContent = 'Verified ✓'; badge.style.color = ''; badge.style.borderColor = ''; badge.style.background = ''; }
+    if(sub) sub.textContent = 'Verified · ' + (handle || '');
+    row.classList.add('done');
+    state[kind] = true;
+    updateSubmit();
   }
   function markDup(kind){
-    state.dup = true;
+    state.dup = true; state[kind] = false;
     const row = document.getElementById('auth-' + kind);
-    if(row){
-      const sub = row.querySelector('[data-role="sub"]'); if(sub) sub.textContent = '⚠️ 이미 참가한 계정';
-      const badge = row.querySelector('[data-role="badge"]'); if(badge) badge.textContent = '이미 참가 ✕';
-    }
-    const b = document.getElementById('submit'); if(b){ b.disabled = true; b.textContent = '이미 참가한 계정이에요'; }
-    toast('이 계정은 이미 참가했어요 — 다른 계정으로 인증해주세요');
+    const badge = row.querySelector('[data-role="badge"]');
+    const sub = row.querySelector('[data-role="sub"]');
+    if(badge){ badge.style.display = 'inline-flex'; badge.textContent = 'Already entered ✕'; badge.style.color = '#c0392b'; badge.style.borderColor = '#e74c3c'; badge.style.background = '#fdecea'; }
+    if(sub) sub.textContent = 'This account already entered';
+    row.classList.remove('done');
+    const b = document.getElementById('submit'); if(b){ b.disabled = true; b.textContent = 'Already entered'; }
+    toast('This account has already entered — use a different one');
   }
 
   function openModal(){
@@ -940,7 +932,7 @@
       if(!res.ok){
         if(res.sheet && res.sheet.result === 'duplicate'){   // 지갑/트위터/텔레그램 중 하나가 이미 참가
           btn.disabled = false; btn.textContent = 'Submit Prediction';
-          toast('이미 참가한 계정이에요 — 지갑·트위터·텔레그램 중 하나가 이미 참가했어요 (1인 1회)');
+          toast('Already entered — your wallet, X, or Telegram is already registered (one entry per person)');
           return;
         }
         throw new Error(res.error || 'entry failed');
@@ -960,7 +952,7 @@
     })
     .catch(err => {
       btn.disabled = false; btn.textContent = 'Submit Prediction';
-      toast('제출 실패 — 서버 연결을 확인하세요');
+      toast('Submit failed — check your connection');
       console.error('submit error', err);
     });
   }
