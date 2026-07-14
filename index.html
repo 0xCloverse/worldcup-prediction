@@ -577,17 +577,37 @@
       .then(res => {
         if(!res.ok || !res.token){ resetTgBtn(btn); toast('시작 실패 — 다시 시도해주세요'); return; }
         state.tgToken = res.token;
-        // 텔레그램 앱/데스크톱으로 봇 대화 열기 (?start=토큰)
+        // 텔레그램 앱/데스크톱으로 봇 대화 열기 (?start=토큰) — 봇이 자동 인증
         window.open('https://telegram.me/' + (res.bot || TG_BOT_USERNAME) + '?start=' + res.token, '_blank');
         const row = document.getElementById('auth-tg');
-        row.querySelector('[data-role="sub"]').textContent = '텔레그램에서 [시작]을 누르면 자동 확인돼요…';
-        btn.innerHTML = '<span class="spin"></span> 확인 중…';
-        pollTelegram(btn);
+        row.querySelector('[data-role="sub"]').textContent = '봇에서 인증되면 → 이 버튼을 눌러주세요 👇';
+        // 버튼을 "지금 확인" 모드로 전환 (자동 폴링이 안 잡아도 사용자가 직접 100% 확인)
+        btn.disabled = false;
+        btn.textContent = '✓ 봇 인증 후 여기 눌러 확인';
+        btn.onclick = function(){ checkTelegramNow(btn); };
+        pollTelegram(btn);   // 자동 폴링도 병행 (되면 저절로 초록불)
       })
       .catch(err => { resetTgBtn(btn); toast('서버 연결 실패'); console.error('tg start error', err); });
   }
 
-  function resetTgBtn(btn){ if(btn){ btn.disabled = false; btn.textContent = 'Verify with Telegram'; } }
+  // 사용자가 직접 누르는 "지금 확인" — 명시적 클릭이라 폴링 타이밍과 무관하게 100% 작동
+  function checkTelegramNow(btn){
+    const orig = btn.textContent;
+    btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 확인 중…';
+    fetch(CONFIG.WORKER_URL + '/telegram/status?token=' + encodeURIComponent(state.tgToken) + '&_=' + Date.now(), { cache: 'no-store' })
+      .then(r => r.json())
+      .then(res => {
+        console.log('[tg-check]', JSON.stringify(res));
+        if(res.status === 'done'){ cleanupPoll(); handleTelegramResult(res, btn); return; }
+        btn.disabled = false; btn.textContent = orig;
+        toast(res.status === 'expired'
+          ? '인증번호가 만료됐어요 — "Verify with Telegram"을 다시 눌러주세요'
+          : '아직 봇 인증 전이에요 — 봇 대화에서 인증 후 다시 눌러주세요');
+      })
+      .catch(err => { btn.disabled = false; btn.textContent = orig; toast('연결 오류 — 다시 눌러주세요'); });
+  }
+
+  function resetTgBtn(btn){ if(btn){ btn.disabled = false; btn.textContent = 'Verify with Telegram'; btn.onclick = function(){ connect('tg', btn); }; } }
 
   // 봇이 [시작]을 받아 결과를 저장할 때까지 서버에 계속 물어봄
   function pollTelegram(btn){
