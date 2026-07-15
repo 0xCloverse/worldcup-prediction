@@ -725,7 +725,9 @@
       return;
     }
     const row = document.getElementById('auth-x');
+    const workerOrigin = new URL(CONFIG.WORKER_URL).origin;   // X 로그인 팝업(우리 서버)만 신뢰할 출처
     const onMessage = (e) => {
+      if(e.origin !== workerOrigin) return;                   // 다른 사이트가 보낸 위조 메시지 무시 (가짜 인증·세션 탈취 차단)
       if(!e.data || e.data.type !== 'cloverse-x-auth') return;
       window.removeEventListener('message', onMessage);
       clearInterval(watchClosed);
@@ -741,8 +743,12 @@
       } else {                              // signed in, but not following yet
         btn.style.display = 'none';
         row.querySelector('.req-sub').style.display = 'block';
-        row.querySelector('.substatus').innerHTML =
-          'Signed in as <b>' + e.data.handle + '</b> — not following <b>@' + X_TARGET_HANDLE + '</b> yet.';
+        const ssx = row.querySelector('.substatus');   // 핸들을 textContent로 넣어 코드 주입(XSS) 차단
+        ssx.textContent = 'Signed in as ';
+        const bx1 = document.createElement('b'); bx1.textContent = e.data.handle; ssx.append(bx1);
+        ssx.append(' — not following ');
+        const bx2 = document.createElement('b'); bx2.textContent = '@' + X_TARGET_HANDLE; ssx.append(bx2);
+        ssx.append(' yet.');
         toast('Signed in as ' + e.data.handle);
       }
     };
@@ -850,8 +856,10 @@
     } else {                                    // 봇 인증은 됐지만 아직 그룹 미참여
       if(btn) btn.style.display = 'none';
       row.querySelector('.req-sub').style.display = 'block';
-      row.querySelector('.substatus').innerHTML =
-        'Signed in as <b>' + (res.handle || '@you') + '</b> — not in the group yet.';
+      const sstg = row.querySelector('.substatus');   // 텔레그램 이름을 textContent로 넣어 코드 주입(XSS) 차단
+      sstg.textContent = 'Signed in as ';
+      const btg = document.createElement('b'); btg.textContent = res.handle || '@you'; sstg.append(btg);
+      sstg.append(' — not in the group yet.');
       toast('Join the group, then tap Re-check');
     }
   }
