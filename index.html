@@ -3,239 +3,454 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Worldcup Prediction · Cloverse</title>
+<title>World Cup Prediction · Cloverse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
 </head>
 <body>
 <style>
+  /* ============================================================
+     MATCHDAY LEDGER — single dark theme over graded stadium video
+     Voices: DISPLAY = Archivo wdth125 700 uppercase
+             UI      = Archivo 400–700
+             DATA    = Barlow (labels) / Barlow Condensed (stat values) — no mono per client
+     ============================================================ */
   :root {
-    --surface-0: #F4F1EB;
-    --surface-1: #FFFFFF;
-    --surface-2: #F6F3ED;
-    --border-soft: #E7E1D5;
-    --border-strong: #D8D1C2;
-    --fg-primary: #1A1815;
-    --fg-muted: #7C776C;
-    --fg-faint: #A8A296;
+    --bg: #0A0A0C;
+    --fg: #F4F1EB;
+    --fg-muted: rgba(244,241,235,0.60);
+    --fg-faint: rgba(244,241,235,0.42);
     --brand: #FF3B47;
     --brand-strong: #E42A36;
-    --brand-soft: #FFECEE;
     --up: #17B26A;
-    --up-soft: #E4F6EC;
-    --font: 'Inter', 'Inter Fallback', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    --r-card: 24px;
-    --r-md: 16px;
-    --r-sm: 12px;
-  }
-  :root[data-theme="dark"] {
-    --surface-0: #0B0B0D;
-    --surface-1: #151518;
-    --surface-2: #1E1E22;
-    --border-soft: #2A2A30;
-    --border-strong: #3A3A42;
-    --fg-primary: #F4F1EB;
-    --fg-muted: #9A958C;
-    --fg-faint: #6B675F;
-    --brand-soft: #2C1518;
-    --up-soft: #10251A;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --surface-0: #0B0B0D; --surface-1: #151518; --surface-2: #1E1E22;
-      --border-soft: #2A2A30; --border-strong: #3A3A42;
-      --fg-primary: #F4F1EB; --fg-muted: #9A958C; --fg-faint: #6B675F;
-      --brand-soft: #2C1518; --up-soft: #10251A;
-    }
+    --hair-0: rgba(255,255,255,0.07);   /* inner dividers */
+    --hair-1: rgba(255,255,255,0.11);   /* component borders */
+    --hair-2: rgba(255,255,255,0.24);   /* hover / emphasis */
+    --glass: rgba(10,10,13,0.55);
+    --font: 'Barlow', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-display: 'Barlow Condensed', 'Barlow', ui-sans-serif, system-ui, sans-serif;
+    --mono: 'Barlow Condensed', 'Barlow', ui-sans-serif, system-ui, sans-serif;   /* 라벨 보이스 — eyebrow와 동일한 컨덴스드체로 통일(사용자 요청) */
+    --r-card: 8px;
+    --r-md: 6px;
+    --r-sm: 4px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html { scroll-behavior: smooth; }
   body {
     font-family: var(--font);
-    background: var(--surface-0);
-    color: var(--fg-primary);
+    background: var(--bg);
+    color: var(--fg);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
+    font-variant-numeric: lining-nums;
   }
   a { color: inherit; text-decoration: none; }
+  ::selection { background: var(--brand); color: #fff; }
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
-  /* prototype strip */
-  .proto-strip {
-    background: var(--surface-2); border-bottom: 1px solid var(--border-soft);
-    color: var(--fg-muted); font-size: 12px; text-align: center; padding: 7px 16px;
+  /* ---- background: graded video + shade + film grain ---- */
+  .bg-video {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    z-index: -2;
+    background: var(--bg);
+    pointer-events: none;
+    /* no CSS filter on the playing video — per-frame GPU filtering janks weak devices; grading is done by the shade */
   }
-  .proto-strip b { color: var(--fg-primary); }
+  .bg-shade {
+    position: fixed; inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(8,8,9,0.86) 0%, rgba(8,8,9,0.58) 40%, rgba(8,8,9,0.90) 100%);
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: 300;
+    pointer-events: none; opacity: 0.04;   /* plain opacity — no blend mode (fixed full-screen blends force expensive compositing) */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+  }
 
-  /* header */
+  /* ---- microlabel voice (one rule, used everywhere) ---- */
+  .pb-k, .mlabel, .prow .pk, .powered, .wm-addr-label {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* ---- header ---- */
   header.site {
     position: sticky; top: 0; z-index: 20;
-    background: color-mix(in srgb, var(--surface-0) 88%, transparent);
-    backdrop-filter: saturate(160%) blur(10px);
-    border-bottom: 1px solid var(--border-soft);
+    background: rgba(9,9,11,0.62);
+    backdrop-filter: blur(24px) saturate(130%);
+    -webkit-backdrop-filter: blur(24px) saturate(130%);
+    border-bottom: 1px solid var(--hair-0);
   }
-  .hwrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; height: 62px; display: flex; align-items: center; gap: 28px; }
-  .logo { display: flex; align-items: center; gap: 9px; }
-  .logo svg { width: 26px; height: 29px; }
-  .logo b { font-size: 18px; font-weight: 800; letter-spacing: -0.4px; }
-  nav.main { display: flex; gap: 22px; align-items: center; }
-  nav.main a { font-size: 14px; font-weight: 600; color: var(--fg-muted); padding: 4px 0; position: relative; white-space: nowrap; }
-  nav.main a:hover { color: var(--fg-primary); }
-  nav.main a.active { color: var(--fg-primary); }
-  nav.main a.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -21px; height: 2px; background: var(--brand); border-radius: 2px; }
+  .hwrap { max-width: 1200px; margin: 0 auto; padding: 0 28px; height: 64px; display: flex; align-items: center; gap: 36px; }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo svg { width: 24px; height: 27px; }
+  .logo b { font-family: 'Inter', var(--font); font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg); }
+  nav.main { display: flex; gap: 28px; align-items: stretch; align-self: stretch; }
+  nav.main a {
+    display: flex; align-items: center;
+    font-family: 'Inter', var(--font); font-size: 14px; font-weight: 600;
+    color: rgba(244,241,235,0.55); position: relative; white-space: nowrap;
+    transition: color .15s var(--ease);
+  }
+  nav.main a:hover, nav.main a.active { color: var(--fg); }
+  nav.main a.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--brand); }
   .hspace { flex: 1; }
-  .wallet { background: var(--brand); color: #fff; font-weight: 600; font-size: 14px; padding: 9px 18px; border-radius: 999px; border: none; cursor: pointer; font-family: inherit; }
+  .wallet {
+    background: var(--brand); color: #fff;
+    font-family: 'Inter', var(--font); font-weight: 600; font-size: 14px;
+    padding: 10px 20px; border-radius: 999px; border: none; cursor: pointer;
+    transition: background-color .15s var(--ease);
+  }
   .wallet:hover { background: var(--brand-strong); }
+  .wallet-wrap { position: relative; }
+  .wallet.connected {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--hair-2); color: var(--fg);
+    font-family: var(--font); letter-spacing: 0.01em;
+    font-size: 13px; font-weight: 500; padding: 9px 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wallet.connected:hover { background: rgba(255,255,255,0.10); }
+  .wallet .wdot { width: 6px; height: 6px; border-radius: 50%; background: var(--up); flex-shrink: 0; }
+  .wallet-menu {
+    position: absolute; top: calc(100% + 10px); right: 0; width: 236px;
+    background: rgba(14,14,16,0.92);
+    backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--hair-1); border-radius: var(--r-card);
+    box-shadow: 0 32px 64px -32px rgba(0,0,0,0.6);
+    padding: 14px; display: none; z-index: 40;
+  }
+  .wallet-menu.show { display: block; animation: fade .18s var(--ease); }
+  .wm-addr { display: flex; align-items: center; gap: 10px; padding: 2px 2px 12px; border-bottom: 1px solid var(--hair-0); }
+  .wm-addr .wm-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--up); flex-shrink: 0; }
+  .wm-addr-label { color: var(--fg-faint); font-size: 10px; }
+  .wm-addr-val { font-size: 13px; font-weight: 500; font-family: var(--font); font-variant-numeric: tabular-nums; }
+  .wm-disc {
+    width: 100%; margin-top: 12px; border: 1px solid var(--hair-1); background: transparent; color: var(--brand);
+    font-family: var(--font); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 10px; border-radius: var(--r-sm); cursor: pointer;
+    transition: border-color .15s var(--ease), background-color .15s var(--ease);
+  }
+  .wm-disc:hover { border-color: rgba(255,59,71,0.5); background: rgba(255,59,71,0.08); }
 
-  /* layout */
-  .page { max-width: 1160px; margin: 0 auto; padding: 30px 24px 60px; }
-  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.6px; color: var(--brand); text-transform: uppercase; margin-bottom: 12px; }
-  .mkt-head { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 26px; }
-  .mkt-title h1 { font-size: 30px; font-weight: 800; letter-spacing: -1px; line-height: 1.1; margin: 0 0 8px; }
-  .mkt-sub { color: var(--fg-muted); font-size: 14.5px; line-height: 1.55; max-width: 440px; }
-  .mkt-sub b { color: var(--fg-primary); font-weight: 700; }
-  .pricebox { display: flex; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface-2); overflow: hidden; flex-shrink: 0; text-align: center; }
-  .pb-cell { padding: 12px 20px; }
-  .pb-cell + .pb-cell { border-left: 1px solid var(--border-soft); }
-  .pb-k { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--fg-faint); margin-bottom: 6px; white-space: nowrap; }
-  .pb-v { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; white-space: nowrap; font-variant-numeric: tabular-nums; line-height: 1; }
-  .pb-v.red { color: var(--brand); }
+  /* ---- layout ---- */
+  /* single centered editorial column — the enter CTA lives inline below the matches */
+  .page { max-width: 920px; margin: 0 auto; padding: 56px 28px 72px; }
+  /* ---- market column (open editorial — matches & CTA are the only glass) ---- */
+  .eyebrow {
+    font-family: var(--font-display); font-size: 17px; font-weight: 600;
+    letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--brand); margin-bottom: 20px;
+  }
+  .market h1 {
+    font-family: var(--font-display);
+    font-size: clamp(48px, 6.5vw, 80px);
+    font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.01em; line-height: 0.92;
+    margin: 0 0 16px; max-width: 14ch;
+  }
+  .mkt-sub { color: var(--fg-muted); font-size: 15px; font-weight: 400; line-height: 1.6; max-width: 46ch; }
 
-  .layout { display: grid; grid-template-columns: 1fr 372px; gap: 20px; align-items: start; }
-  .card { background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: var(--r-card); }
+  /* ---- hero: lead on the left, vertical stat list on the right ---- */
+  .hero {
+    display: grid; grid-template-columns: 1fr minmax(216px, 260px);
+    gap: 56px; align-items: start;
+    margin: 8px 0 44px;
+  }
+  .stats { display: flex; flex-direction: column; }
+  .stat {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 14px 0; text-align: right; align-items: flex-end;
+  }
+  .stat:first-child { padding-top: 2px; }
+  .pb-k { color: var(--fg-faint); }
+  .pb-v { font-variant-numeric: tabular-nums; line-height: 1; }
+  .pb-v.red {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: 52px; letter-spacing: 0.01em; color: var(--brand);
+  }
+  .pb-v.red em { font-style: normal; color: var(--brand); }
+  #closes-val, #entries-val {
+    font-family: var(--font-display); font-weight: 600; font-size: 30px;
+    letter-spacing: 0.03em; text-transform: uppercase;
+    display: inline-block; line-height: 1;
+  }
+  .pb-sub {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-faint);
+    margin-top: 2px;
+  }
 
-  /* market card */
-  .market { padding: 26px; }
-
-  .match { border: 1px solid var(--border-soft); border-radius: var(--r-md); padding: 16px; margin-bottom: 14px; background: var(--surface-1); }
-  .match .mhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
-  .match .mlabel { font-size: 12px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: var(--fg-muted); display: flex; align-items: center; gap: 7px; }
-  .match .mdate { font-size: 12px; color: var(--fg-faint); font-weight: 600; }
+  /* ---- match modules ---- */
+  .match {
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    border: 1px solid var(--hair-1); border-radius: var(--r-card);
+    padding: 20px; margin-bottom: 12px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .match .mhead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+  .mlabel { color: var(--fg-muted); }
   .teams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .team { border: 2px solid var(--border-soft); border-radius: var(--r-sm); padding: 15px 10px; text-align: center; cursor: pointer; background: var(--surface-1); transition: border-color .16s, background .16s, transform .1s; position: relative; }
-  .team:hover { border-color: var(--border-strong); }
-  .team:active { transform: scale(.98); }
-  .team .flag { font-size: 30px; line-height: 1; display: block; margin-bottom: 7px; }
-  .team .nm { font-size: 14.5px; font-weight: 700; }
-  .team .mult { font-size: 11.5px; color: var(--fg-muted); font-weight: 600; margin-top: 2px; }
-  .team.sel { border-color: var(--brand); background: var(--brand-soft); }
-  .team.sel .nm { color: var(--brand); }
-  .team .pick-badge { position: absolute; top: 8px; right: 8px; width: 18px; height: 18px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 11px; font-weight: 800; display: none; align-items: center; justify-content: center; line-height: 1; }
+  .team {
+    border: 1px solid rgba(255,255,255,0.14); border-radius: var(--r-md);
+    padding: 18px 16px 15px; text-align: left; cursor: pointer;
+    background: rgba(255,255,255,0.04); position: relative;
+    transition: border-color .16s var(--ease), background-color .16s var(--ease), opacity .16s var(--ease);
+  }
+  .team:hover { border-color: var(--hair-2); background: rgba(255,255,255,0.07); }
+  .team:active { transform: scale(0.99); }
+  .trow { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .tflag {
+    display: block; width: 27px; height: 18px; border-radius: 3px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.22); flex-shrink: 0;
+  }
+  .tflag svg { display: block; width: 100%; height: 100%; }
+  .team .flag {
+    display: block; font-family: var(--font-display); font-size: 34px; font-weight: 700;
+    letter-spacing: 0.02em; line-height: 1; text-transform: uppercase;
+  }
+  .team .nm { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg-muted); }
+  .team.sel { background: var(--fg); border-color: var(--fg); }
+  .team.sel .flag { color: #0B0B0D; }
+  .team.sel .nm { color: rgba(11,11,13,0.65); }
+  .team.sel .tflag { border-color: rgba(11,11,13,0.25); }
+  .teams:has(.sel) .team:not(.sel) { opacity: 0.45; }
+  .teams:has(.sel) .team:not(.sel):hover { opacity: 0.8; }
+  .team .pick-badge {
+    position: absolute; top: 10px; right: 10px; width: 16px; height: 16px;
+    border-radius: 2px; background: var(--brand);
+    display: none; align-items: center; justify-content: center;
+  }
+  .team .pick-badge svg { width: 9px; height: 8px; display: block; }
   .team.sel .pick-badge { display: flex; }
-  .exnote { font-size: 12px; color: var(--fg-faint); text-align: center; margin-top: 4px; }
+  /* 넓어진 팀 타일(~427px)에 맞춰 아이덴티티 행 확대 — 좁은 화면은 기존 크기 유지 */
+  @media (min-width: 721px) {
+    .team { padding: 20px 20px 17px; }
+    .team .flag { font-size: 44px; }
+    .tflag { width: 33px; height: 22px; }
+    .team .pick-badge { width: 18px; height: 18px; }
+  }
 
-  /* sidebar */
-  .side { display: grid; gap: 16px; position: sticky; top: 82px; }
+  /* ---- inline enter zone (below the matches) ---- */
+  .enter-note { font-size: 12px; font-weight: 400; color: var(--fg-muted); line-height: 1.6; margin: 0 0 18px; }
+  .picks-recap { display: block; margin: 0 0 4px; }
+  .prow { display: flex; align-items: center; justify-content: space-between; padding: 13px 0; border-top: 1px solid var(--hair-0); }
+  .prow .pk { color: var(--fg-faint); }
+  .prow .pv { font-size: 15px; font-weight: 600; }
+  .submit {
+    width: 100%; border: none; cursor: pointer;
+    background: var(--brand); color: #fff;
+    font-family: var(--font); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    height: 52px; padding: 0 16px; border-radius: var(--r-sm); margin-top: 18px;
+    transition: background-color .15s var(--ease), transform .1s var(--ease);
+  }
+  .submit:hover:not(:disabled) { background: var(--brand-strong); }
+  .submit:active:not(:disabled) { transform: translateY(1px); }
+  .submit:disabled { background: rgba(255,255,255,0.07); border: 1px solid var(--hair-0); color: rgba(244,241,235,0.35); cursor: not-allowed; }
+  /* 인라인 Enter 존 — 매치 스택과 32px 섹션 브레이크, 페이지 주 CTA는 한 체급 크게 */
+  .market .match:last-of-type { margin-bottom: 0; }
+  #enter-summary { margin-top: 32px; }
+  #enter-summary .submit { margin-top: 0; height: 60px; font-size: 13px; letter-spacing: 0.14em; }
+  .fineprint { font-size: 11px; color: var(--fg-faint); margin-top: 12px; line-height: 1.6; text-align: left; }
 
-  .enter-card { padding: 22px 24px; }
-  #enter-summary h3 { font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--fg-muted); margin-bottom: 14px; }
-  .entered-state { text-align: center; padding: 6px 0; }
-  .entered-state .clover { font-size: 46px; animation: pop .6s cubic-bezier(.2,1.4,.4,1); }
-  .entered-state h3 { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; margin: 8px 0 6px; }
-  .entered-state p { color: var(--fg-muted); font-size: 13.5px; line-height: 1.5; }
-  .req { padding: 13px 0; border-top: 1px solid var(--border-soft); }
+  /* ---- entered / success (shared component) ---- */
+  .entered-state {
+    text-align: left; margin-top: 32px; padding: 24px 20px 20px;
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    border: 1px solid var(--hair-1); border-radius: var(--r-card);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .entered-state .clover, .success .clover { display: inline-flex; animation: pop .5s cubic-bezier(.2,1.2,.4,1); }
+  .entered-state h3, .success h3 {
+    font-family: var(--font-display); font-size: 21px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.02em; margin: 14px 0 6px;
+  }
+  .entered-state p, .success p { color: var(--fg-muted); font-size: 13px; line-height: 1.6; }
+  .entered-state .picks-recap { margin-top: 16px; }
+  .success { padding: 4px 0 0; text-align: left; display: none; }
+  .success.show { display: block; animation: fade .3s var(--ease); }
+
+  /* ---- requirement rows (entry modal) ---- */
+  .req { padding: 15px 0; border-top: 1px solid var(--hair-0); }
   .req:first-of-type { border-top: none; }
-  .req-main { display: flex; align-items: center; gap: 12px; }
-  .req.done .ric { box-shadow: 0 0 0 3px var(--up-soft); }
-  .req-sub { margin-top: 11px; padding: 12px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 11px; }
-  .substatus { font-size: 12.5px; color: var(--fg-muted); display: block; margin-bottom: 10px; line-height: 1.5; }
-  .substatus b { color: var(--fg-primary); font-weight: 700; }
-  .subbtns { display: flex; gap: 8px; }
-  .subbtn { flex: 1; border: 1px solid var(--border-strong); background: var(--surface-1); color: var(--fg-primary); font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 10px; border-radius: 9px; cursor: pointer; transition: background .15s; }
-  .subbtn:hover { background: var(--surface-2); }
-  .subbtn.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
-  .subbtn.primary:hover { background: var(--brand-strong); }
-  .subbtn .spin { display: inline-block; width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.5); border-top-color: #fff; border-radius: 50%; vertical-align: -1px; animation: rot .7s linear infinite; }
-  .subbtn:not(.primary) .spin { border-color: var(--border-strong); border-top-color: var(--fg-muted); }
-  .enter-note { font-size: 12px; color: var(--fg-muted); margin: -6px 0 12px; line-height: 1.5; }
-  .enter-note b { color: var(--fg-primary); font-weight: 700; }
-  .req .ric { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 15px; flex-shrink: 0; }
+  .req-main { display: flex; align-items: center; gap: 14px; }
+  .req .ric {
+    width: 34px; height: 34px; border-radius: var(--r-sm);
+    display: grid; place-items: center;
+    border: 1px solid var(--hair-1); background: rgba(255,255,255,0.04);
+    font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--fg);
+    flex-shrink: 0;
+  }
+  .req .ric svg { width: 16px; height: 16px; display: block; }
+  .req.done .ric { border-color: rgba(23,178,106,0.45); color: var(--up); }
   .req .rtx { flex: 1; }
-  .req .rtx .rt { font-size: 14px; font-weight: 700; }
-  .req .rtx .rd { font-size: 11.5px; color: var(--fg-muted); }
-  .req .ract { border: 1px solid var(--border-strong); background: var(--surface-1); color: var(--fg-primary); font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 9px; cursor: pointer; flex-shrink: 0; transition: background .15s; }
-  .req .ract:hover { background: var(--surface-2); }
-  .req .ract.verified { background: var(--up-soft); border-color: var(--up); color: var(--up); pointer-events: none; }
-  .req .ract .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border-strong); border-top-color: var(--fg-muted); border-radius: 50%; vertical-align: -1px; animation: rot .7s linear infinite; }
+  .req .rtx .rt { font-size: 14px; font-weight: 600; }
+  .req .rtx .rd { font-family: var(--font); font-size: 11px; letter-spacing: 0.02em; color: var(--fg-faint); }
+  .ract {
+    border: 1px solid var(--hair-2); background: transparent; color: var(--fg);
+    font-family: var(--font); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 9px 14px; border-radius: var(--r-sm); cursor: pointer; flex-shrink: 0;
+    transition: background-color .15s var(--ease), border-color .15s var(--ease);
+  }
+  .ract:hover { background: rgba(255,255,255,0.08); }
+  .ract.verified {
+    background: transparent; border-color: rgba(23,178,106,0.45); color: var(--up);
+    font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.12em;
+    pointer-events: none;
+  }
+  .ract.dup {
+    border-color: rgba(255,59,71,0.55); color: var(--brand); background: rgba(255,59,71,0.08);
+    pointer-events: auto; cursor: pointer;
+  }
+  .req-sub { margin-top: 12px; padding: 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--hair-0); border-radius: var(--r-md); }
+  .substatus { font-size: 12px; color: var(--fg-muted); display: block; margin-bottom: 12px; line-height: 1.6; }
+  .substatus b { color: var(--fg); font-weight: 600; }
+  .subbtns { display: flex; gap: 8px; }
+  .subbtn {
+    flex: 1; border: 1px solid var(--hair-2); background: transparent; color: var(--fg);
+    font-family: var(--font); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    height: 40px; padding: 0 10px; border-radius: var(--r-sm); cursor: pointer;
+    transition: background-color .15s var(--ease);
+  }
+  .subbtn:hover { background: rgba(255,255,255,0.08); }
+  .subbtn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .subbtn.primary:hover { background: var(--brand-strong); }
+
+  /* ---- one spinner ---- */
+  .spin {
+    display: inline-block; width: 1em; height: 1em;
+    border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%;
+    vertical-align: -0.15em; animation: rot .7s linear infinite; opacity: 0.8;
+  }
   @keyframes rot { to { transform: rotate(360deg); } }
 
-  .picks-recap { background: var(--surface-2); border-radius: var(--r-sm); padding: 12px 14px; margin: 16px 0 4px; display: grid; gap: 8px; }
-  .prow { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
-  .prow .pk { color: var(--fg-muted); font-weight: 600; }
-  .prow .pv { font-weight: 700; }
-  .prow .pv.empty { color: var(--fg-faint); font-weight: 600; }
+  /* ---- footer ---- */
+  footer.site { border-top: 1px solid var(--hair-0); margin-top: 48px; }
+  .fwrap { max-width: 1200px; margin: 0 auto; padding: 18px 28px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .powered { display: flex; align-items: center; gap: 9px; color: var(--fg-muted); }
+  .powered .chz { width: 15px; height: 15px; border-radius: 50%; display: block; flex-shrink: 0; }
+  .fright { display: flex; align-items: center; gap: 4px; }
+  .ficon {
+    width: 38px; height: 38px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-muted); transition: color .15s var(--ease), background-color .15s var(--ease);
+  }
+  .ficon:hover { color: var(--fg); background: rgba(255,255,255,0.06); }
+  .ficon svg { width: 16px; height: 16px; display: block; }
 
-  .submit { width: 100%; border: none; cursor: pointer; background: var(--brand); color: #fff; font-family: inherit; font-size: 15.5px; font-weight: 700; padding: 15px; border-radius: 13px; margin-top: 16px; transition: background .18s, opacity .18s; }
-  .submit:hover:not(:disabled) { background: var(--brand-strong); }
-  .submit:disabled { background: var(--border-strong); color: var(--surface-1); cursor: not-allowed; }
-  .submit .spin { border-color: rgba(255,255,255,.4); border-top-color:#fff; }
-  .fineprint { font-size: 11.5px; color: var(--fg-faint); text-align: center; margin-top: 12px; line-height: 1.6; }
-
-  /* success state */
-  .success { padding: 6px 0 0; text-align: center; display: none; }
-  .success.show { display: block; animation: fade .4s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(8px);} to {opacity:1; transform:none;} }
-  .success .clover { font-size: 52px; animation: pop .6s cubic-bezier(.2,1.4,.4,1); }
-  @keyframes pop { 0%{transform:scale(0)} 70%{transform:scale(1.15)} 100%{transform:scale(1)} }
-  .success h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; margin: 10px 0 6px; text-transform: none; color: var(--fg-primary); }
-  .success p { color: var(--fg-muted); font-size: 14px; }
-
-  /* footer */
-  footer.site { border-top: 1px solid var(--border-soft); margin-top: 20px; }
-  .fwrap { max-width: 1160px; margin: 0 auto; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-  .powered { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--fg-muted); }
-  .powered .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); }
-  .fright { display: flex; align-items: center; gap: 6px; }
-  .ficon { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--border-soft); background: var(--surface-1); display: grid; place-items: center; cursor: pointer; color: var(--fg-muted); font-size: 14px; }
-  .ficon:hover { color: var(--fg-primary); border-color: var(--border-strong); }
-
-  .toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 30px); background: var(--fg-primary); color: var(--surface-1); font-size: 13.5px; font-weight: 600; padding: 11px 20px; border-radius: 999px; opacity: 0; pointer-events: none; transition: opacity .3s, transform .3s; z-index: 60; }
+  /* ---- toast / confetti ---- */
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 30px);
+    background: rgba(14,14,16,0.88);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--hair-1); color: var(--fg);
+    font-family: var(--font); font-size: 13px; font-weight: 500;
+    padding: 12px 18px; border-radius: var(--r-md);
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s var(--ease), transform .25s var(--ease);
+    z-index: 60; max-width: calc(100vw - 40px); text-align: center;
+  }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 200; }
 
-  /* modal */
+  /* ---- modals ---- */
   body.modal-open { overflow: hidden; }
-  .modal-overlay { position: fixed; inset: 0; background: rgba(10,10,12,0.55); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
-  .modal-overlay.show { display: flex; animation: fade .2s ease; }
-  .modal { background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 24px; width: 100%; max-width: 440px; max-height: 88vh; overflow-y: auto; padding: 26px; position: relative; box-shadow: 0 30px 80px -20px rgba(0,0,0,0.55); animation: modalIn .25s cubic-bezier(.2,.8,.3,1); }
-  .modal-close { position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border-radius: 9px; border: none; background: var(--surface-2); color: var(--fg-muted); font-size: 14px; font-family: inherit; cursor: pointer; display: grid; place-items: center; }
-  .modal-close:hover { background: var(--border-soft); color: var(--fg-primary); }
-  .modal-title { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 14px; padding-right: 34px; }
-  .modal-picks { font-size: 13px; font-weight: 600; color: var(--fg-primary); margin-bottom: 16px; padding: 11px 14px; background: var(--surface-2); border-radius: 11px; }
-  @keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }
-  @media (prefers-reduced-motion: reduce) { .modal-overlay.show, .modal { animation: none; } }
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(5,5,6,0.72);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; animation: fade .2s var(--ease); }
+  .modal {
+    background: rgba(14,14,16,0.92);
+    backdrop-filter: blur(24px) saturate(120%);
+    -webkit-backdrop-filter: blur(24px) saturate(120%);
+    border: 1px solid var(--hair-1); border-radius: var(--r-card);
+    width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto;
+    padding: 30px; position: relative;
+    box-shadow: 0 32px 64px -32px rgba(0,0,0,0.6);
+    animation: modalIn .22s var(--ease);
+  }
+  .modal-close {
+    position: absolute; top: 18px; right: 18px; width: 32px; height: 32px;
+    border-radius: var(--r-sm); border: 1px solid var(--hair-1); background: transparent;
+    color: var(--fg-muted); font-size: 15px; font-family: var(--font); cursor: pointer;
+    display: grid; place-items: center;
+    transition: border-color .15s var(--ease), color .15s var(--ease);
+  }
+  .modal-close:hover { border-color: var(--hair-2); color: var(--fg); }
+  .modal-title {
+    font-family: var(--font-display); font-size: 23px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.1;
+    margin-bottom: 18px; padding-right: 36px;
+  }
+  .modal-picks {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    margin-bottom: 6px; padding: 14px 0;
+    border-top: 1px solid var(--hair-0); border-bottom: 1px solid var(--hair-0);
+  }
+  .mp-cell { display: flex; flex-direction: column; gap: 8px; }
+  .mp-k { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-faint); }
+  .mp-row { display: flex; align-items: center; gap: 10px; }
+  .mp-row b { font-family: var(--font-display); font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: 0.02em; text-transform: uppercase; }
+  /* 1단계 확인 모달: 참가비 무료 강조 행 */
+  .fee-row { border-top: none; padding: 14px 0 4px; }
+  .fee-row .pv.free {
+    font-family: var(--font-display); font-size: 22px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em; color: var(--up); line-height: 1;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.12); } 100% { transform: scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .modal-overlay.show, .modal, .clover, .success.show { animation: none !important; } }
 
-  /* wallet connect options (inside modal) */
-  .wallet-opts { display: grid; gap: 9px; }
-  .wopt { display: flex; align-items: center; gap: 13px; width: 100%; text-align: left; border: 1px solid var(--border-soft); background: var(--surface-1); border-radius: var(--r-md); padding: 12px 14px; cursor: pointer; font-family: inherit; transition: border-color .15s, background .15s, transform .1s; }
-  .wopt:hover { border-color: var(--border-strong); background: var(--surface-2); }
-  .wopt:active { transform: scale(.99); }
-  .wopt.busy { pointer-events: none; opacity: .75; }
-  .wopt-ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; font-size: 20px; flex-shrink: 0; }
-  .wopt-tx { flex: 1; display: flex; flex-direction: column; }
-  .wopt-nm { font-size: 15px; font-weight: 700; color: var(--fg-primary); }
-  .wopt-sub { font-size: 12px; color: var(--fg-muted); }
-  .wopt-arrow { color: var(--fg-faint); font-size: 15px; width: 16px; text-align: center; flex-shrink: 0; }
-  .wopt-arrow .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--border-strong); border-top-color: var(--fg-muted); border-radius: 50%; vertical-align: -1px; animation: rot .7s linear infinite; }
+  /* ---- wallet modal: type rows ---- */
+  .wallet-opts { display: block; margin-top: 4px; }
+  .wopt {
+    display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+    border: none; border-top: 1px solid var(--hair-0); background: transparent;
+    border-radius: 0; padding: 16px 2px; cursor: pointer; font-family: var(--font);
+    transition: background-color .15s var(--ease);
+  }
+  .wopt:last-child { border-bottom: 1px solid var(--hair-0); }
+  .wopt:hover { background: rgba(255,255,255,0.05); }
+  .wopt.busy { pointer-events: none; opacity: 0.7; }
+  .wopt-ic {
+    width: 38px; height: 38px; border-radius: var(--r-md);
+    border: 1px solid var(--hair-0); background: rgba(255,255,255,0.05);
+    display: grid; place-items: center; flex-shrink: 0;
+  }
+  .wopt-ic svg { width: 22px; height: auto; display: block; }
+  .wopt-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .wopt-nm { font-size: 15px; font-weight: 600; color: var(--fg); }
+  .wopt-sub { font-size: 12px; color: var(--fg-faint); }
+  .wopt-arrow { font-family: var(--mono); color: var(--fg-faint); font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 
-  /* wallet connected pill + account menu (header) */
-  .wallet-wrap { position: relative; }
-  .wallet.connected { background: var(--surface-1); color: var(--fg-primary); border: 1px solid var(--border-strong); display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; }
-  .wallet.connected:hover { background: var(--surface-2); }
-  .wallet .wdot { width: 7px; height: 7px; border-radius: 50%; background: var(--up); box-shadow: 0 0 0 3px var(--up-soft); flex-shrink: 0; }
-  .wallet-menu { position: absolute; top: calc(100% + 8px); right: 0; width: 224px; background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: var(--r-md); box-shadow: 0 14px 34px rgba(0,0,0,.14); padding: 12px; display: none; z-index: 40; }
-  .wallet-menu.show { display: block; animation: fade .18s ease; }
-  .wm-addr { display: flex; align-items: center; gap: 10px; padding: 4px 4px 12px; border-bottom: 1px solid var(--border-soft); }
-  .wm-addr .wm-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--up); box-shadow: 0 0 0 3px var(--up-soft); flex-shrink: 0; }
-  .wm-addr-label { font-size: 11px; color: var(--fg-muted); font-weight: 600; }
-  .wm-addr-val { font-size: 14px; font-weight: 700; font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; }
-  .wm-disc { width: 100%; margin-top: 10px; border: 1px solid var(--border-strong); background: var(--surface-1); color: var(--brand); font-family: inherit; font-size: 13px; font-weight: 700; padding: 9px; border-radius: 9px; cursor: pointer; transition: background .15s, border-color .15s; }
-  .wm-disc:hover { background: var(--brand-soft); border-color: var(--brand); }
-
-  @media (max-width: 880px) {
+  /* ---- responsive ---- */
+  @media (max-width: 920px) {
     nav.main { display: none; }
-    .layout { grid-template-columns: 1fr; }
-    .side { position: static; }
-    .mkt-head { flex-direction: column; gap: 16px; }
-    .mkt-title h1 { font-size: 26px; }
+    .page { padding: 40px 20px 56px; }
+    .hwrap { padding: 0 20px; }
+    .hero { grid-template-columns: 1fr; gap: 20px; }
+    .stat { text-align: left; align-items: flex-start; }
+    .stat:first-child { padding-top: 4px; }
+    .market h1 { font-size: clamp(36px, 10vw, 52px); }
+    .pb-v.red { font-size: clamp(44px, 11vw, 56px); }   /* 스택 시엔 뷰포트 연동 */
   }
 </style>
 
@@ -246,16 +461,20 @@
   <path fill="#FF3B47" d="M9.06484 13.5616C10.0234 12.6031 11.5775 12.6031 12.5361 13.5616L15.2388 16.2644C16.1974 17.2229 16.1974 18.7771 15.2388 19.7356L12.5361 22.4384C11.5775 23.3969 10.0234 23.3969 9.06484 22.4384L6.36209 19.7356C5.40353 18.7771 5.40353 17.2229 6.36209 16.2644L9.06484 13.5616Z"/>
 </symbol></svg>
 
-<div class="proto-strip">🔧 <b>Prototype</b> for development reference — interactions are simulated (no real wallet, payments, or data)</div>
+<!-- background layers: video (back) + dark shade (over the video) -->
+<video class="bg-video" autoplay muted loop playsinline preload="auto" aria-hidden="true">
+  <source src="worldcup-bg.mp4" type="video/mp4">
+</video>
+<div class="bg-shade" aria-hidden="true"></div>
 
 <header class="site">
   <div class="hwrap">
-    <a class="logo" href="#"><svg><use href="#clover"/></svg><b>Cloverse</b></a>
+    <a class="logo" href="https://www.cloverse.org"><svg><use href="#clover"/></svg><b>Cloverse</b></a>
     <nav class="main">
-      <a href="#">Up &amp; Down</a>
-      <a href="#" class="active">Worldcup Prediction</a>
-      <a href="#">Lottery</a>
-      <a href="#">Leaderboard</a>
+      <a href="https://www.cloverse.org/up-down">Up &amp; Down</a>
+      <a href="#" class="active">World Cup Prediction</a>
+      <a href="https://www.cloverse.org/lottery">Lottery</a>
+      <a href="https://www.cloverse.org/leaderboard">Leaderboard</a>
     </nav>
     <div class="hspace"></div>
     <div class="wallet-wrap" id="wallet-wrap">
@@ -275,138 +494,140 @@
 </header>
 
 <div class="page">
-  <div class="layout">
-
-    <!-- LEFT: market -->
-    <div class="card market">
-      <div class="eyebrow">2026 FIFA World Cup</div>
-      <div class="mkt-head">
-        <div class="mkt-title">
-          <h1>Worldcup Prediction</h1>
-          <p class="mkt-sub">Pick the winner of each match. Get both right and <b>8 winners</b> are drawn at random to share the prize.</p>
-        </div>
-        <div class="pricebox">
-          <div class="pb-cell"><span class="pb-k">Prize pool</span><span class="pb-v red">$8,888</span></div>
-          <div class="pb-cell"><span class="pb-k">Closes in</span><span class="pb-v" id="closes-val">—</span></div>
-        </div>
+  <div class="market">
+    <div class="hero">
+      <div class="hero-lead">
+        <div class="eyebrow">2026 FIFA World Cup</div>
+        <h1>World Cup<br>Prediction</h1>
+        <p class="mkt-sub">Correctly predict the winner of both matches. Eight correct entries will be drawn at random to split the prize pool</p>
       </div>
+      <div class="stats">
+        <div class="stat"><span class="pb-k">Total prize pool</span><span class="pb-v red"><em>$</em>8,888</span></div>
+        <div class="stat"><span class="pb-k">Entries</span><span class="pb-v" id="entries-val">1,284</span></div>
+        <div class="stat"><span class="pb-k">Entries close</span><span class="pb-v" id="closes-val">—</span><span class="pb-sub">Jul 18 · 21:00 UTC</span></div>
+      </div>
+    </div>
 
       <div class="match">
         <div class="mhead">
-          <span class="mlabel">🏆 Final</span>
-          <span class="mdate">Jul 19, 2026 · 19:00 UTC</span>
+          <span class="mlabel">Final</span>
         </div>
         <div class="teams" data-match="final">
-          <div class="team" data-team="Argentina" onclick="pick(this,'final')"><span class="pick-badge">✓</span><span class="flag">🇦🇷</span><span class="nm">Argentina</span></div>
-          <div class="team" data-team="France" onclick="pick(this,'final')"><span class="pick-badge">✓</span><span class="flag">🇫🇷</span><span class="nm">France</span></div>
+          <div class="team" data-team="Argentina" onclick="pick(this,'final')" tabindex="0"><span class="pick-badge"><svg viewBox="0 0 10 8" fill="none" aria-hidden="true"><path d="M1 4.2 3.6 6.8 9 1.2" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="trow"><span class="tflag" aria-hidden="true"><svg viewBox="0 0 3 2" preserveAspectRatio="none"><rect width="3" height="2" fill="#74ACDF"/><rect y="0.667" width="3" height="0.666" fill="#fff"/><circle cx="1.5" cy="1" r="0.2" fill="#F6B40E"/></svg></span><span class="flag">ARG</span></span><span class="nm">Argentina</span></div>
+          <div class="team" data-team="France" onclick="pick(this,'final')" tabindex="0"><span class="pick-badge"><svg viewBox="0 0 10 8" fill="none" aria-hidden="true"><path d="M1 4.2 3.6 6.8 9 1.2" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="trow"><span class="tflag" aria-hidden="true"><svg viewBox="0 0 3 2" preserveAspectRatio="none"><rect width="1" height="2" fill="#0055A4"/><rect x="1" width="1" height="2" fill="#fff"/><rect x="2" width="1" height="2" fill="#EF4135"/></svg></span><span class="flag">FRA</span></span><span class="nm">France</span></div>
         </div>
       </div>
 
       <div class="match">
         <div class="mhead">
-          <span class="mlabel">🥉 3rd-Place Play-off</span>
-          <span class="mdate">Jul 18, 2026 · 21:00 UTC</span>
+          <span class="mlabel">Third-Place Play-off</span>
         </div>
         <div class="teams" data-match="third">
-          <div class="team" data-team="Brazil" onclick="pick(this,'third')"><span class="pick-badge">✓</span><span class="flag">🇧🇷</span><span class="nm">Brazil</span></div>
-          <div class="team" data-team="Spain" onclick="pick(this,'third')"><span class="pick-badge">✓</span><span class="flag">🇪🇸</span><span class="nm">Spain</span></div>
+          <div class="team" data-team="Brazil" onclick="pick(this,'third')" tabindex="0"><span class="pick-badge"><svg viewBox="0 0 10 8" fill="none" aria-hidden="true"><path d="M1 4.2 3.6 6.8 9 1.2" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="trow"><span class="tflag" aria-hidden="true"><svg viewBox="0 0 3 2" preserveAspectRatio="none"><rect width="3" height="2" fill="#009C3B"/><path d="M1.5 0.2 2.75 1 1.5 1.8 0.25 1Z" fill="#FFDF00"/><circle cx="1.5" cy="1" r="0.34" fill="#002776"/></svg></span><span class="flag">BRA</span></span><span class="nm">Brazil</span></div>
+          <div class="team" data-team="Spain" onclick="pick(this,'third')" tabindex="0"><span class="pick-badge"><svg viewBox="0 0 10 8" fill="none" aria-hidden="true"><path d="M1 4.2 3.6 6.8 9 1.2" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="trow"><span class="tflag" aria-hidden="true"><svg viewBox="0 0 3 2" preserveAspectRatio="none"><rect width="3" height="2" fill="#AA151B"/><rect y="0.5" width="3" height="1" fill="#F1BF00"/></svg></span><span class="flag">ESP</span></span><span class="nm">Spain</span></div>
         </div>
       </div>
-      <div class="exnote">Teams shown are placeholders — replaced with the real qualifiers after the semi-finals.</div>
-    </div>
-
-    <!-- RIGHT: sidebar -->
-    <div class="side">
-      <div class="card enter-card">
-        <div id="enter-summary">
-          <h3>Enter</h3>
-          <p class="enter-note">Free to enter — connect your wallet, then follow <b>@0xCloverse</b> on X and join Telegram.</p>
-          <div class="picks-recap">
-            <div class="prow"><span class="pk">🏆 Final</span><span class="pv empty" id="rc-final">Not picked</span></div>
-            <div class="prow"><span class="pk">🥉 3rd place</span><span class="pv empty" id="rc-third">Not picked</span></div>
-          </div>
-          <button class="submit" id="enter-btn" onclick="openModal()" disabled>Connect wallet to enter</button>
-          <div class="fineprint">No fee · connect your wallet to enter · one entry per account.</div>
-        </div>
-        <div id="entered-state" class="entered-state" style="display:none">
-          <div class="clover">🍀</div>
-          <h3>You're in!</h3>
-          <p>Your prediction is locked. Winners are drawn at random after the matches.</p>
-          <div class="picks-recap" style="text-align:left;margin-top:14px">
-            <div class="prow"><span class="pk">🏆 Final</span><span class="pv" id="done-final">—</span></div>
-            <div class="prow"><span class="pk">🥉 3rd place</span><span class="pv" id="done-third">—</span></div>
-          </div>
+      <div id="enter-summary">
+        <button class="submit" id="enter-btn" onclick="openModal()" disabled>Connect wallet to enter</button>
+        <div class="fineprint">Free entry · one entry per person.</div>
+      </div>
+      <div id="entered-state" class="entered-state" style="display:none">
+        <div class="clover"><svg viewBox="0 0 32 36" width="44" height="50" aria-hidden="true"><use href="#clover"/></svg></div>
+        <h3>You're in</h3>
+        <p>Your prediction is locked. Winners are drawn at random after both matches.</p>
+        <div class="picks-recap">
+          <div class="prow"><span class="pk">Final</span><span class="pv" id="done-final">—</span></div>
+          <div class="prow"><span class="pk">Third place</span><span class="pv" id="done-third">—</span></div>
         </div>
       </div>
-    </div>
-
   </div>
 </div>
 
 <footer class="site">
   <div class="fwrap">
-    <div class="powered"><span class="dot"></span>Powered by Chiliz Chain</div>
+    <div class="powered">
+      <svg class="chz" viewBox="0 0 32 32" aria-hidden="true"><g fill="none" fill-rule="evenodd"><circle fill="#CD0124" cx="16" cy="16" r="16"/><path d="M23.319 7.25c.652 0 1.181.546 1.181 1.22 0 .674-.529 1.22-1.181 1.22l-.073-.001-2.544 6.192c.145.203.231.454.231.725 0 .62-.447 1.132-1.026 1.21l-2.623 6.385c.195.217.314.509.314.829 0 .674-.529 1.22-1.181 1.22s-1.181-.546-1.181-1.22c0-.324.121-.618.32-.836l-3.007-6.371-.07.004c-.611 0-1.114-.48-1.175-1.096l-.006-.125c0-.309.112-.591.295-.807L8.71 9.69l-.028.002c-.611 0-1.114-.48-1.175-1.096L7.5 8.47c0-.674.529-1.22 1.181-1.22.497 0 .922.317 1.096.765h12.446c.174-.448.6-.765 1.096-.765zm-7.077 7.141l-2.607 1.96a1.238 1.238 0 01-.29 1.086l3.01 6.375.062-.003c.023 0 .047 0 .07.002l2.558-6.227a1.252 1.252 0 01-.385-1.444l-2.418-1.749zM9.66 9.63l2.719 5.761.1-.005c.247 0 .475.078.664.21l2.337-1.756-5.82-4.21zm12.531.296l-5.196 3.9 2.291 1.659c.108-.048.224-.08.345-.093l.121-.006c.065 0 .128.005.19.016l2.249-5.476zm-.164-1.001H10.22l6.013 4.35 5.794-4.35z" fill="#FFF"/></g></svg>
+      Powered by Chiliz Chain
+    </div>
     <div class="fright">
-      <div class="ficon" onclick="toggleTheme()" id="theme-btn" title="Toggle theme">☀</div>
-      <div class="ficon" title="X">𝕏</div>
-      <div class="ficon" title="Telegram">✈</div>
+      <a class="ficon" href="https://x.com/0xCloverse" target="_blank" rel="noopener noreferrer" aria-label="X">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      </a>
+      <a class="ficon" href="https://telegram.me/cloverse_community" target="_blank" rel="noopener noreferrer" aria-label="Telegram">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71l-4.14-3.05-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
+      </a>
+      <a class="ficon" href="https://0xcloverse.github.io/documentation/" target="_blank" rel="noopener noreferrer" aria-label="Docs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3v4a1 1 0 001 1h4"/><path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/><path d="M9 9h1M9 13h6M9 17h6"/></svg>
+      </a>
     </div>
   </div>
 </footer>
 
-<!-- ENTER MODAL -->
+<!-- CONFIRM MODAL (step 1 — picks recap + free-entry emphasis) -->
+<div class="modal-overlay" id="confirm-modal" onclick="closeConfirmBg(event)">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Confirm your picks" style="max-width:420px">
+    <button class="modal-close" onclick="closeConfirmModal()" aria-label="Close">×</button>
+    <h3 class="modal-title">Confirm your picks</h3>
+    <div class="modal-picks" id="modal-picks"></div>
+    <div class="prow fee-row"><span class="pk">Entry fee</span><span class="pv free">Free</span></div>
+    <button class="submit" onclick="confirmAndProceed()">Submit prediction</button>
+    <div class="fineprint">No fee, no transaction — entering is completely free.</div>
+  </div>
+</div>
+
+<!-- ENTER MODAL (step 2 — follow &amp; verify) -->
 <div class="modal-overlay" id="modal" onclick="closeModalBg(event)">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Complete your entry">
-    <button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>
+    <button class="modal-close" onclick="closeModal()" aria-label="Close">×</button>
     <div id="modal-form">
-      <h3 class="modal-title">Complete your entry</h3>
-      <p class="modal-picks" id="modal-picks">Final — · 3rd place —</p>
+      <h3 class="modal-title">One last step</h3>
+      <p class="enter-note" style="margin:-6px 0 4px">Your entry only counts once you follow us — verify both to lock it in.</p>
 
       <div class="req" id="auth-x">
         <div class="req-main">
-          <div class="ric" style="background:#000">𝕏</div>
-          <div class="rtx"><div class="rt">Follow @0xCloverse on X</div><div class="rd" data-role="sub"></div></div>
-          <button class="ract" data-role="connect" onclick="connect('x', this)">Sign in with X</button>
-          <span class="ract verified" data-role="badge" style="display:none">Verified ✓</span>
+          <div class="ric"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#F4F1EB" d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></div>
+          <div class="rtx"><div class="rt">Follow on X</div><div class="rd" data-role="sub"></div></div>
+          <button class="ract" data-role="connect" onclick="connect('x', this)">Verify</button>
+          <span class="ract verified" data-role="badge" style="display:none">Verified</span>
         </div>
         <div class="req-sub" style="display:none">
           <span class="substatus">Signed in as <b>@you</b> — not following <b>@0xCloverse</b> yet.</span>
           <div class="subbtns">
             <button class="subbtn primary" onclick="openAction('x')">Follow @0xCloverse ↗</button>
-            <button class="subbtn" onclick="recheck('x', this)">Re-check</button>
+            <button class="subbtn" onclick="recheck('x', this)">Verify</button>
           </div>
         </div>
       </div>
 
       <div class="req" id="auth-tg">
         <div class="req-main">
-          <div class="ric" style="background:#229ED9">✈</div>
-          <div class="rtx"><div class="rt">Join the Telegram group</div><div class="rd" data-role="sub"></div></div>
-          <button class="ract" data-role="connect" onclick="connect('tg', this)">Verify with Telegram</button>
-          <span class="ract verified" data-role="badge" style="display:none">Verified ✓</span>
+          <div class="ric"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#26A5E4" d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg></div>
+          <div class="rtx"><div class="rt">Join Telegram</div><div class="rd" data-role="sub"></div></div>
+          <button class="ract" data-role="connect" onclick="connect('tg', this)">Verify</button>
+          <span class="ract verified" data-role="badge" style="display:none">Verified</span>
         </div>
         <div class="req-sub" style="display:none">
           <span class="substatus">Connected as <b>@you</b> — not in the group yet.</span>
           <div class="subbtns">
             <button class="subbtn primary" onclick="openAction('tg')">Join group ↗</button>
-            <button class="subbtn" onclick="recheck('tg', this)">Re-check</button>
+            <button class="subbtn" onclick="recheck('tg', this)">Verify</button>
           </div>
         </div>
       </div>
 
       <button class="submit" id="submit" onclick="submitEntry(this)" disabled>Complete the steps above</button>
-      <div class="fineprint">Free entry · verified via X &amp; Telegram · one entry per account.</div>
+      <div class="fineprint">Free entry. One entry per person, verified via X and Telegram.</div>
     </div>
 
     <div class="success" id="success">
-      <div class="clover">🍀</div>
-      <h3>You're in!</h3>
-      <p>Your prediction is locked. Winners are drawn at random after the matches.</p>
-      <div class="picks-recap" style="margin-top:18px;text-align:left">
-        <div class="prow"><span class="pk">🏆 Final</span><span class="pv" id="s-final">—</span></div>
-        <div class="prow"><span class="pk">🥉 3rd place</span><span class="pv" id="s-third">—</span></div>
+      <div class="clover"><svg viewBox="0 0 32 36" width="44" height="50" aria-hidden="true"><use href="#clover"/></svg></div>
+      <h3>You're in</h3>
+      <p>Your prediction is locked. Winners are drawn at random after both matches.</p>
+      <div class="picks-recap" style="margin-top:12px">
+        <div class="prow"><span class="pk">Final</span><span class="pv" id="s-final">—</span></div>
+        <div class="prow"><span class="pk">Third place</span><span class="pv" id="s-third">—</span></div>
       </div>
-      <button class="submit" style="margin-top:18px" onclick="closeModal()">Done</button>
+      <button class="submit" style="margin-top:20px" onclick="closeModal()">Done</button>
     </div>
   </div>
 </div>
@@ -414,22 +635,22 @@
 <!-- WALLET MODAL -->
 <div class="modal-overlay" id="wallet-modal" onclick="closeWalletBg(event)">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Connect your wallet" style="max-width:400px">
-    <button class="modal-close" onclick="closeWalletModal()" aria-label="Close">✕</button>
+    <button class="modal-close" onclick="closeWalletModal()" aria-label="Close">×</button>
     <h3 class="modal-title">Connect your wallet</h3>
-    <p class="enter-note" style="margin:-4px 0 16px">Connect a wallet on <b>Chiliz Chain</b> to enter. Only connected wallets can participate.</p>
+    <p class="enter-note" style="margin:-6px 0 10px">Connect a wallet on Chiliz Chain to enter. Only connected wallets can participate.</p>
     <div class="wallet-opts">
       <button class="wopt" onclick="connectWallet(this,'MetaMask')">
-        <span class="wopt-ic" style="background:#FDECDA">🦊</span>
+        <span class="wopt-ic"><svg aria-hidden="true" fill="none" height="33" viewBox="0 0 35 33" width="35" xmlns="http://www.w3.org/2000/svg"><g stroke-linecap="round" stroke-linejoin="round" stroke-width=".25"><path d="m32.9582 1-13.1341 9.7183 2.4424-5.72731z" fill="#e17726" stroke="#e17726"/><g fill="#e27625" stroke="#e27625"><path d="m2.66296 1 13.01714 9.809-2.3254-5.81802z"/><path d="m28.2295 23.5335-3.4947 5.3386 7.4829 2.0603 2.1436-7.2823z"/><path d="m1.27281 23.6501 2.13055 7.2823 7.46994-2.0603-3.48166-5.3386z"/><path d="m10.4706 14.5149-2.0786 3.1358 7.405.3369-.2469-7.969z"/><path d="m25.1505 14.5149-5.1575-4.58704-.1688 8.05974 7.4049-.3369z"/><path d="m10.8733 28.8721 4.4819-2.1639-3.8583-3.0062z"/><path d="m20.2659 26.7082 4.4689 2.1639-.6105-5.1701z"/></g><path d="m24.7348 28.8721-4.469-2.1639.3638 2.9025-.039 1.231z" fill="#d5bfb2" stroke="#d5bfb2"/><path d="m10.8732 28.8721 4.1572 1.9696-.026-1.231.3508-2.9025z" fill="#d5bfb2" stroke="#d5bfb2"/><path d="m15.1084 21.7842-3.7155-1.0884 2.6243-1.2051z" fill="#233447" stroke="#233447"/><path d="m20.5126 21.7842 1.0913-2.2935 2.6372 1.2051z" fill="#233447" stroke="#233447"/><path d="m10.8733 28.8721.6495-5.3386-4.13117.1167z" fill="#cc6228" stroke="#cc6228"/><path d="m24.0982 23.5335.6366 5.3386 3.4946-5.2219z" fill="#cc6228" stroke="#cc6228"/><path d="m27.2291 17.6507-7.405.3369.6885 3.7966 1.0913-2.2935 2.6372 1.2051z" fill="#cc6228" stroke="#cc6228"/><path d="m11.3929 20.6958 2.6242-1.2051 1.0913 2.2935.6885-3.7966-7.40495-.3369z" fill="#cc6228" stroke="#cc6228"/><path d="m8.392 17.6507 3.1049 6.0513-.1039-3.0062z" fill="#e27525" stroke="#e27525"/><path d="m24.2412 20.6958-.1169 3.0062 3.1049-6.0513z" fill="#e27525" stroke="#e27525"/><path d="m15.797 17.9876-.6886 3.7967.8704 4.4833.1949-5.9087z" fill="#e27525" stroke="#e27525"/><path d="m19.8242 17.9876-.3638 2.3584.1819 5.9216.8704-4.4833z" fill="#e27525" stroke="#e27525"/><path d="m20.5127 21.7842-.8704 4.4834.6236.4406 3.8584-3.0062.1169-3.0062z" fill="#f5841f" stroke="#f5841f"/><path d="m11.3929 20.6958.104 3.0062 3.8583 3.0062.6236-.4406-.8704-4.4834z" fill="#f5841f" stroke="#f5841f"/><path d="m20.5906 30.8417.039-1.231-.3378-.2851h-4.9626l-.3248.2851.026 1.231-4.1572-1.9696 1.4551 1.1921 2.9489 2.0344h5.0536l2.962-2.0344 1.442-1.1921z" fill="#c0ac9d" stroke="#c0ac9d"/><path d="m20.2659 26.7082-.6236-.4406h-3.6635l-.6236.4406-.3508 2.9025.3248-.2851h4.9626l.3378.2851z" fill="#161616" stroke="#161616"/><path d="m33.5168 11.3532 1.1043-5.36447-1.6629-4.98873-12.6923 9.3944 4.8846 4.1205 6.8983 2.0085 1.52-1.7752-.6626-.4795 1.0523-.9588-.8054-.622 1.0523-.8034z" fill="#763e1a" stroke="#763e1a"/><path d="m1 5.98873 1.11724 5.36447-.71451.5313 1.06527.8034-.80545.622 1.05228.9588-.66255.4795 1.51997 1.7752 6.89835-2.0085 4.8846-4.1205-12.69233-9.3944z" fill="#763e1a" stroke="#763e1a"/><path d="m32.0489 16.5234-6.8983-2.0085 2.0786 3.1358-3.1049 6.0513 4.1052-.0519h6.1318z" fill="#f5841f" stroke="#f5841f"/><path d="m10.4705 14.5149-6.89828 2.0085-2.29944 7.1267h6.11883l4.10519.0519-3.10487-6.0513z" fill="#f5841f" stroke="#f5841f"/><path d="m19.8241 17.9876.4417-7.5932 2.0007-5.4034h-8.9119l2.0006 5.4034.4417 7.5932.1689 2.3842.013 5.8958h3.6635l.013-5.8958z" fill="#f5841f" stroke="#f5841f"/></g></svg></span>
         <span class="wopt-tx"><span class="wopt-nm">MetaMask</span><span class="wopt-sub">Browser extension</span></span>
         <span class="wopt-arrow">↗</span>
       </button>
       <button class="wopt" onclick="connectWallet(this,'WalletConnect')">
-        <span class="wopt-ic" style="background:#E4EEFF">🔗</span>
+        <span class="wopt-ic"><svg aria-hidden="true" fill="none" height="332" viewBox="0 0 480 332" width="480" xmlns="http://www.w3.org/2000/svg"><path d="m126.613 93.9842c62.622-61.3123 164.152-61.3123 226.775 0l7.536 7.3788c3.131 3.066 3.131 8.036 0 11.102l-25.781 25.242c-1.566 1.533-4.104 1.533-5.67 0l-10.371-10.154c-43.687-42.7734-114.517-42.7734-158.204 0l-11.107 10.874c-1.565 1.533-4.103 1.533-5.669 0l-25.781-25.242c-3.132-3.066-3.132-8.036 0-11.102zm280.093 52.2038 22.946 22.465c3.131 3.066 3.131 8.036 0 11.102l-103.463 101.301c-3.131 3.065-8.208 3.065-11.339 0l-73.432-71.896c-.783-.767-2.052-.767-2.835 0l-73.43 71.896c-3.131 3.065-8.208 3.065-11.339 0l-103.4657-101.302c-3.1311-3.066-3.1311-8.036 0-11.102l22.9456-22.466c3.1311-3.065 8.2077-3.065 11.3388 0l73.4333 71.897c.782.767 2.051.767 2.834 0l73.429-71.897c3.131-3.065 8.208-3.065 11.339 0l73.433 71.897c.783.767 2.052.767 2.835 0l73.431-71.895c3.132-3.066 8.208-3.066 11.339 0z" fill="#3396ff"/></svg></span>
         <span class="wopt-tx"><span class="wopt-nm">WalletConnect</span><span class="wopt-sub">Scan with a mobile wallet</span></span>
         <span class="wopt-arrow">↗</span>
       </button>
     </div>
-    <div class="fineprint" style="margin-top:16px">🔒 Prototype — no real wallet is connected. Selecting one simulates a connection.</div>
+    <div class="fineprint" style="margin-top:14px">Connecting proves wallet ownership only — no transaction is made.</div>
   </div>
 </div>
 
@@ -468,7 +689,9 @@
   function closeWalletModal(){
     const m = document.getElementById('wallet-modal');
     m.classList.remove('show');
-    if(!document.getElementById('modal').classList.contains('show')) document.body.classList.remove('modal-open');
+    const otherOpen = document.getElementById('modal').classList.contains('show')
+      || document.getElementById('confirm-modal').classList.contains('show');
+    if(!otherOpen) document.body.classList.remove('modal-open');
     m.querySelectorAll('.wopt').forEach(o=>{ o.classList.remove('busy'); const a = o.querySelector('.wopt-arrow'); if(a) a.textContent = '↗'; });
   }
   function closeWalletBg(e){ if(e.target.id === 'wallet-modal') closeWalletModal(); }
@@ -575,7 +798,7 @@
           showQrModal: true,                     // WalletConnect 기본 QR 모달 사용
           rpcMap: { 88888: CHILIZ.params.rpcUrls[0] },
           metadata: {
-            name: 'Cloverse Worldcup Prediction',
+            name: 'Cloverse World Cup Prediction',
             description: 'Predict the World Cup final standings',
             url: 'https://0xcloverse.github.io/worldcup-prediction/',
             icons: ['https://0xcloverse.github.io/worldcup-prediction/favicon.png']
@@ -635,7 +858,6 @@
   function resetEntryState(){
     state.submitted = false; state.final = null; state.third = null;
     document.querySelectorAll('.team').forEach(t => t.classList.remove('sel'));
-    ['rc-final','rc-third'].forEach(function(id){ var rc = document.getElementById(id); if(rc){ rc.textContent = '—'; rc.classList.add('empty'); } });
     var es = document.getElementById('enter-summary'), ed = document.getElementById('entered-state');
     if(es) es.style.display = '';  if(ed) ed.style.display = 'none';
   }
@@ -662,9 +884,6 @@
     document.querySelectorAll('.team').forEach(t=>{
       if(t.dataset.team === final || t.dataset.team === third) t.classList.add('sel');
     });
-    const rf = document.getElementById('rc-final'), rt = document.getElementById('rc-third');
-    if(rf){ rf.textContent = final; rf.classList.remove('empty'); }
-    if(rt){ rt.textContent = third; rt.classList.remove('empty'); }
     const df = document.getElementById('done-final'), dt = document.getElementById('done-third');
     if(df) df.textContent = final;  if(dt) dt.textContent = third;
     const es = document.getElementById('enter-summary'), ed = document.getElementById('entered-state');
@@ -692,8 +911,13 @@
     const menu = document.getElementById('wallet-menu');
     if(menu && menu.classList.contains('show') && wrap && !wrap.contains(e.target)) menu.classList.remove('show');
   });
-  // Esc closes the wallet modal
-  document.addEventListener('keydown', e=>{ if(e.key === 'Escape') closeWalletModal(); });
+  // Esc closes whichever modal is open (wallet → confirm → enter 순)
+  document.addEventListener('keydown', e=>{
+    if(e.key !== 'Escape') return;
+    if(document.getElementById('wallet-modal').classList.contains('show')) closeWalletModal();
+    else if(document.getElementById('confirm-modal').classList.contains('show')) closeConfirmModal();
+    else if(document.getElementById('modal').classList.contains('show')) closeModal();
+  });
 
   function pick(el, match){
     if(state.submitted) return;
@@ -701,8 +925,6 @@
     el.parentElement.querySelectorAll('.team').forEach(t=>t.classList.remove('sel'));
     el.classList.add('sel');
     state[match] = el.dataset.team;
-    const rc = document.getElementById(match==='final'?'rc-final':'rc-third');
-    rc.textContent = el.dataset.team; rc.classList.remove('empty');
     updateEnterBtn();
   }
 
@@ -720,7 +942,7 @@
     btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
     const popup = window.open(CONFIG.WORKER_URL + '/x/login', 'cloverse-x-auth', 'width=520,height=640');
     if(!popup){
-      btn.disabled = false; btn.textContent = 'Sign in with X';
+      btn.disabled = false; btn.textContent = 'Verify';
       toast('Popup blocked — allow popups and try again');
       return;
     }
@@ -732,7 +954,7 @@
       window.removeEventListener('message', onMessage);
       clearInterval(watchClosed);
       if(!e.data.ok){
-        btn.disabled = false; btn.textContent = 'Sign in with X';
+        btn.disabled = false; btn.textContent = 'Verify';
         toast('X sign-in failed: ' + (e.data.error || 'unknown error'));
         return;
       }
@@ -758,7 +980,7 @@
       if(popup.closed){
         clearInterval(watchClosed);
         window.removeEventListener('message', onMessage);
-        if(btn.style.display !== 'none'){ btn.disabled = false; btn.textContent = 'Sign in with X'; }
+        if(btn.style.display !== 'none'){ btn.disabled = false; btn.textContent = 'Verify'; }
       }
     }, 500);
   }
@@ -776,10 +998,10 @@
         // 텔레그램 앱/데스크톱으로 봇 대화 열기 (?start=토큰) — 봇이 자동 인증
         window.open('https://telegram.me/' + (res.bot || TG_BOT_USERNAME) + '?start=' + res.token, '_blank');
         const row = document.getElementById('auth-tg');
-        row.querySelector('[data-role="sub"]').textContent = 'Verify in the bot, then tap this button 👇';
+        row.querySelector('[data-role="sub"]').textContent = 'Verify in the bot, then confirm below';
         // 버튼을 "지금 확인" 모드로 전환 (자동 폴링이 안 잡아도 사용자가 직접 100% 확인)
         btn.disabled = false;
-        btn.textContent = '✓ Tap here after verifying in the bot';
+        btn.textContent = 'Verify';
         btn.onclick = function(){ checkTelegramNow(btn); };
         pollTelegram(btn);   // 자동 폴링도 병행 (되면 저절로 초록불)
       })
@@ -803,7 +1025,7 @@
       .catch(err => { btn.disabled = false; btn.textContent = orig; toast('Connection error — tap again'); });
   }
 
-  function resetTgBtn(btn){ if(btn){ btn.disabled = false; btn.textContent = 'Verify with Telegram'; btn.onclick = function(){ connect('tg', btn); }; } }
+  function resetTgBtn(btn){ if(btn){ btn.disabled = false; btn.textContent = 'Verify'; btn.onclick = function(){ connect('tg', btn); }; } }
 
   // 봇이 [시작]을 받아 결과를 저장할 때까지 서버에 계속 물어봄
   function pollTelegram(btn){
@@ -818,7 +1040,7 @@
           console.log('[tg-poll]', JSON.stringify(res));   // 진단용
           if(res.status === 'expired'){
             finished = true; cleanupPoll();
-            if(sub) sub.textContent = '⚠️ Code expired — tap the button to retry';
+            if(sub) sub.textContent = 'Code expired — tap the button to retry';
             resetTgBtn(btn); return;
           }
           if(res.status === 'done'){ finished = true; cleanupPoll(); handleTelegramResult(res, btn); return; }
@@ -885,7 +1107,7 @@
         .then(res => {
           btn.disabled = false; btn.textContent = orig;
           if(!res.ok){
-            toast(res.error === 'session_expired' ? 'Session expired — please Sign in again' : ('Check failed: ' + res.error));
+            toast(res.error === 'session_expired' ? 'Session expired — tap Verify again' : ('Check failed: ' + res.error));
             return;
           }
           if(!res.following){ toast('Not following yet — tap Follow first'); return; }
@@ -921,7 +1143,7 @@
       });
   }
 
-  // sidebar CTA — enabled once both winners are picked; opens the modal
+  // inline enter CTA (below the matches) — enabled once both winners are picked; opens the modal
   function updateEnterBtn(){
     if(state.submitted) return;
     const b = document.getElementById('enter-btn');
@@ -935,7 +1157,7 @@
     const b = document.getElementById('submit');
     if(state.dupX || state.dupTg){ b.disabled = true; b.textContent = 'Already entered'; return; }
     if(!state.x || !state.tg){ b.disabled = true; b.textContent = 'Complete the steps above'; return; }
-    b.disabled = false; b.textContent = 'Submit Prediction';
+    b.disabled = false; b.textContent = 'Complete entry';
   }
 
   // After an auth succeeds: look up whether that account already entered, then show the FINAL state
@@ -955,7 +1177,7 @@
     const row = document.getElementById('auth-' + kind);
     const badge = row.querySelector('[data-role="badge"]');
     const sub = row.querySelector('[data-role="sub"]');
-    if(badge){ badge.style.display = 'inline-flex'; badge.textContent = 'Verified ✓'; badge.onclick = null; badge.style.cursor = ''; badge.style.pointerEvents = ''; badge.style.color = ''; badge.style.borderColor = ''; badge.style.background = ''; }
+    if(badge){ badge.style.display = 'inline-flex'; badge.textContent = 'Verified'; badge.classList.remove('dup'); badge.onclick = null; badge.title = ''; }
     if(sub) sub.textContent = 'Verified · ' + (handle || '');
     row.classList.add('done');
     if(kind === 'x') state.dupX = false; else state.dupTg = false;   // 재인증 성공 시 중복 표시 해제
@@ -969,48 +1191,77 @@
     const badge = row.querySelector('[data-role="badge"]');
     const sub = row.querySelector('[data-role="sub"]');
     if(badge){
-      badge.style.display = 'inline-flex'; badge.textContent = 'Already entered ✕';
-      badge.style.color = '#c0392b'; badge.style.borderColor = '#e74c3c'; badge.style.background = '#fdecea';
-      badge.style.cursor = 'pointer'; badge.style.pointerEvents = 'auto'; badge.title = 'Tap to use a different account';   // .verified의 pointer-events:none 무력화 → ✕ 클릭 가능
-      badge.onclick = function(){ resetAuth(kind); };   // ✕ 누르면 이 인증 리셋 → 다시 인증
+      badge.style.display = 'inline-flex'; badge.textContent = 'Already entered ×';
+      badge.classList.add('dup');   // .dup가 색·클릭 가능(pointer-events)을 CSS에서 처리
+      badge.title = 'Tap to use a different account';
+      badge.onclick = function(){ resetAuth(kind); };   // × 누르면 이 인증 리셋 → 다시 인증
     }
     if(sub) sub.textContent = 'This account already entered';
     row.classList.remove('done');
     updateSubmit();
-    toast('This account has already entered — tap ✕ to use a different one');
+    toast('This account has already entered — tap × to use a different one');
   }
 
-  // "Already entered ✕"의 ✕를 누르면 → 이 인증을 초기화하고 인증 버튼을 다시 보여줌 (다른 계정으로)
+  // "Already entered ×"를 누르면 → 이 인증을 초기화하고 인증 버튼을 다시 보여줌 (다른 계정으로)
   function resetAuth(kind){
     if(kind === 'x') state.dupX = false; else state.dupTg = false;
     state[kind] = false;
     const row = document.getElementById('auth-' + kind);
     const badge = row.querySelector('[data-role="badge"]');
-    if(badge){ badge.style.display = 'none'; badge.onclick = null; badge.style.cursor = ''; badge.style.pointerEvents = ''; badge.style.color = ''; badge.style.borderColor = ''; badge.style.background = ''; }
+    if(badge){ badge.style.display = 'none'; badge.classList.remove('dup'); badge.onclick = null; badge.title = ''; }
     const rsub = row.querySelector('.req-sub'); if(rsub) rsub.style.display = 'none';
     const sub = row.querySelector('[data-role="sub"]'); if(sub) sub.textContent = '';
     row.classList.remove('done');
     const cbtn = row.querySelector('[data-role="connect"]');
     if(cbtn){
       cbtn.style.display = ''; cbtn.disabled = false;
-      if(kind === 'x'){ cbtn.textContent = 'Sign in with X'; }
-      else { cbtn.textContent = 'Verify with Telegram'; cbtn.onclick = function(){ connect('tg', cbtn); }; }
+      if(kind === 'x'){ cbtn.textContent = 'Verify'; }
+      else { cbtn.textContent = 'Verify'; cbtn.onclick = function(){ connect('tg', cbtn); }; }
     }
     updateSubmit();
   }
 
+  // ENTER 버튼 → 1단계: 픽 재확인 + 무료 강조 모달
   function openModal(){
     if(!state.wallet){ openWalletModal(); return; }
     if(!state.final || !state.third) return;
-    document.getElementById('modal-picks').innerHTML =
-      'Final: <b>' + state.final + '</b>&nbsp;&nbsp;·&nbsp;&nbsp;3rd place: <b>' + state.third + '</b>';
+    // 내가 픽한 팀을 국기 칩 + 코드로 보여줌 (팀 타일에서 국기/코드를 복제 — 팀 바뀌어도 자동 반영)
+    const mp = document.getElementById('modal-picks');
+    mp.textContent = '';
+    [['Final', state.final], ['Third place', state.third]].forEach(function(pair){
+      const cell = document.createElement('div'); cell.className = 'mp-cell';
+      const k = document.createElement('span'); k.className = 'mp-k'; k.textContent = pair[0];
+      const row = document.createElement('span'); row.className = 'mp-row';
+      const src = document.querySelector('.team[data-team="' + pair[1] + '"]');
+      if(src){
+        const fl = src.querySelector('.tflag');
+        if(fl) row.appendChild(fl.cloneNode(true));
+        const code = document.createElement('b'); code.textContent = src.querySelector('.flag').textContent;
+        row.appendChild(code);
+      } else {
+        const code = document.createElement('b'); code.textContent = pair[1] || '—';
+        row.appendChild(code);
+      }
+      cell.append(k, row); mp.appendChild(cell);
+    });
+    document.getElementById('confirm-modal').classList.add('show');
+    document.body.classList.add('modal-open');
+  }
+  function closeConfirmModal(){
+    document.getElementById('confirm-modal').classList.remove('show');
+    if(!document.getElementById('modal').classList.contains('show')) document.body.classList.remove('modal-open');
+  }
+  function closeConfirmBg(e){ if(e.target.id === 'confirm-modal') closeConfirmModal(); }
+  // 1단계 Submit → 2단계: 팔로우 인증 모달 (인증 완료해야 진짜 참가)
+  function confirmAndProceed(){
+    document.getElementById('confirm-modal').classList.remove('show');
     updateSubmit();
     document.getElementById('modal').classList.add('show');
     document.body.classList.add('modal-open');
   }
   function closeModal(){
     document.getElementById('modal').classList.remove('show');
-    document.body.classList.remove('modal-open');
+    if(!document.getElementById('confirm-modal').classList.contains('show')) document.body.classList.remove('modal-open');
   }
   function closeModalBg(e){ if(e.target.id === 'modal') closeModal(); }
 
@@ -1031,7 +1282,7 @@
     .then(res => {
       if(!res.ok){
         if(res.sheet && res.sheet.result === 'duplicate'){   // 지갑/트위터/텔레그램 중 하나가 이미 참가
-          btn.disabled = false; btn.textContent = 'Submit Prediction';
+          btn.disabled = false; btn.textContent = 'Complete entry';
           toast('Already entered — your wallet, X, or Telegram is already registered (one entry per person)');
           return;
         }
@@ -1051,7 +1302,7 @@
       celebrate();
     })
     .catch(err => {
-      btn.disabled = false; btn.textContent = 'Submit Prediction';
+      btn.disabled = false; btn.textContent = 'Complete entry';
       toast('Submit failed — check your connection');
       console.error('submit error', err);
     });
@@ -1064,19 +1315,7 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(()=>el.classList.remove('show'), 1900);
   }
 
-  // theme
-  function applyTheme(t){
-    document.documentElement.setAttribute('data-theme', t);
-    document.getElementById('theme-btn').textContent = t==='dark' ? '☾' : '☀';
-    try { localStorage.setItem('cv-theme', t); } catch(e){}
-  }
-  function toggleTheme(){
-    const cur = document.documentElement.getAttribute('data-theme')
-      || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    applyTheme(cur === 'dark' ? 'light' : 'dark');
-  }
-  (function(){ try { const v = localStorage.getItem('cv-theme'); if(v) applyTheme(v);
-    else document.getElementById('theme-btn').textContent = matchMedia('(prefers-color-scheme: dark)').matches ? '☾' : '☀'; } catch(e){} })();
+  // (single dark theme — theme toggle removed)
 
   // countdown to Final 2026-07-19 20:00
   (function(){
@@ -1088,12 +1327,25 @@
         if(!el) return;
         if(t <= 0){ el.textContent = 'Closed'; return; }
         const d = Math.floor(t/86400000);
-        const h = Math.floor(t/3600000) % 24;
-        const m = Math.floor(t/60000) % 60;
-        el.textContent = (d > 0 ? d + 'd ' : '') + h + 'h ' + m + 'm';
+        const h = String(Math.floor(t/3600000) % 24).padStart(2,'0');
+        const m = String(Math.floor(t/60000) % 60).padStart(2,'0');
+        el.textContent = (d > 0 ? d + 'D ' : '') + h + 'H ' + m + 'M';   // 자릿수 고정(모노+패딩) → 숫자 바뀔 때 흔들림 없음
       } catch(e){}
     }
     tick(); setInterval(tick, 30000);
+  })();
+
+  // 총 참가자 수(ENTRIES) — 서버 /entry/count 조회. 엔드포인트가 아직 없으면 조용히 실패하고 '—' 유지.
+  (function(){
+    fetch(CONFIG.WORKER_URL + '/entry/count')
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(res && res.ok && typeof res.count === 'number'){
+          var el = document.getElementById('entries-val');
+          if(el) el.textContent = res.count.toLocaleString('en-US');
+        }
+      })
+      .catch(function(){});
   })();
 
   // confetti
@@ -1101,11 +1353,11 @@
     if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const cv = document.getElementById('confetti'), ctx = cv.getContext('2d');
     cv.width = innerWidth; cv.height = innerHeight;
-    const colors = ['#FF3B47','#17B26A','#1A1815','#F4C430','#229ED9'];
-    const parts = Array.from({length:100}, (_,i)=>({
+    const colors = ['#FF3B47','#E42A36','#F4F1EB','rgba(255,59,71,0.55)'];   // 브랜드 레드+본화이트만 (레인보우 금지)
+    const parts = Array.from({length:64}, (_,i)=>({
       x: innerWidth*0.72 + (Math.random()-0.5)*160, y: innerHeight*0.4,
       vx: (Math.random()-0.5)*9, vy: Math.random()*-12-4,
-      s: Math.random()*7+4, c: colors[i%colors.length], r: Math.random()*6, vr:(Math.random()-0.5)*0.3
+      s: Math.random()*3+3, c: colors[i%colors.length], r: Math.random()*6, vr:(Math.random()-0.5)*0.3
     }));
     let f=0;
     (function anim(){
